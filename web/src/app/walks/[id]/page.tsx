@@ -108,32 +108,34 @@ function WalkDetailContent() {
   }, [points]);
 
   return (
-    <main className="flex-1 max-w-2xl mx-auto w-full p-6">
-      <Link href="/walks" className="text-sm underline">
-        ← Back to walks
-      </Link>
+    <main className="relative h-dvh w-full overflow-hidden">
+      <div ref={mapContainer} className="absolute inset-0 h-full w-full" />
 
-      {error && <p className="text-red-600 mt-4">{error}</p>}
+      <div className="absolute top-4 left-4 z-10 max-w-xs rounded-lg border border-black/10 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-black/80">
+        <Link href="/walks" className="text-sm underline">
+          ← Back to walks
+        </Link>
 
-      {walk && (
-        <div className="mt-4 mb-4">
-          <h1 className="text-2xl font-semibold">
-            {(walk.distance_meters / 1000).toFixed(2)} km
-          </h1>
-          <p className="text-gray-600">
-            {new Date(walk.started_at).toLocaleString()} ·{" "}
-            {formatDuration(walk.duration_seconds)} ·{" "}
-            {(
-              walk.duration_seconds /
-              60 /
-              (walk.distance_meters / 1000 || 1)
-            ).toFixed(1)}{" "}
-            min/km
-          </p>
-        </div>
-      )}
+        {error && <p className="mt-2 text-red-600">{error}</p>}
 
-      <div ref={mapContainer} className="w-full h-96 rounded border" />
+        {walk && (
+          <div className="mt-2">
+            <h1 className="text-2xl font-semibold">
+              {(walk.distance_meters / 1000).toFixed(2)} km
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              {new Date(walk.started_at).toLocaleString()} ·{" "}
+              {formatDuration(walk.duration_seconds)} ·{" "}
+              {(
+                walk.duration_seconds /
+                60 /
+                (walk.distance_meters / 1000 || 1)
+              ).toFixed(1)}{" "}
+              min/km
+            </p>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
