@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/walk.dart';
 import '../services/supabase_service.dart';
+import 'walk_detail_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -56,6 +57,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   '${walk.startedAt.toLocal()}'.split('.').first,
                 ),
                 trailing: Text(_formatDuration(walk.durationSeconds)),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => WalkDetailScreen(walk: walk),
+                  ),
+                ),
               );
             },
           );
