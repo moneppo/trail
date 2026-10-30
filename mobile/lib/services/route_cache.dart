@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 /// matching service once. The key includes the point count and a version so
 /// a changed track or a matcher update invalidates the entry.
 class RouteCache {
-  static const _version = 1;
+  static const _version = 2;
 
   Future<File> _file(String walkId, int pointCount) async {
     final dir = await getApplicationSupportDirectory();

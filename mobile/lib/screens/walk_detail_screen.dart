@@ -21,6 +21,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   late Future<List<LatLng>> _rawFuture;
   Future<List<LatLng>>? _snappedFuture;
   bool _snap = true;
+  String? _snapStatus;
 
   @override
   void initState() {
@@ -34,11 +35,22 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   Future<List<LatLng>> _snapRoute(List<LatLng> raw) async {
     final cache = RouteCache();
     final cached = await cache.read(widget.walk.id, raw.length);
-    if (cached != null) return cached;
+    if (cached != null) {
+      debugPrint('[WalkDetail] ${widget.walk.id}: snapped route from cache');
+      _setStatus('Snapped route loaded from cache');
+      return cached;
+    }
 
     final result = await RouteMatcher().match(raw);
-    if (result.complete) await cache.write(widget.walk.id, result.route);
+    _setStatus(result.summary.toString());
+    // Only cache a route that actually snapped; a failed or empty match
+    // should be retried next time rather than remembered.
+    if (result.summary.usable) await cache.write(widget.walk.id, result.route);
     return result.route;
+  }
+
+  void _setStatus(String status) {
+    if (mounted) setState(() => _snapStatus = status);
   }
 
   String _formatDuration(int seconds) {
@@ -80,6 +92,14 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
             value: _snap,
             onChanged: (v) => setState(() => _snap = v),
           ),
+          if (_snap)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                _snapStatus ?? 'Matching…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
           Expanded(
             child: FutureBuilder<List<LatLng>>(
               future: _snap ? _snappedFuture : _rawFuture,

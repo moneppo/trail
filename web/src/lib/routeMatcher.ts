@@ -11,9 +11,35 @@ const ENDPOINT = "https://valhalla1.openstreetmap.de/trace_attributes";
 const CHUNK_SIZE = 400;
 const OVERLAP = 10;
 const MAX_SNAP_METERS = 25;
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 
 export type LngLat = [number, number];
+
+/** What happened when a route was matched, for showing in the UI and logs. */
+export type MatchSummary = {
+  total: number;
+  snapped: number; // moved onto a street/sidewalk/trail
+  unmatched: number; // Valhalla found nothing nearby: raw GPS kept
+  rejected: number; // snap would move the point > MAX_SNAP_METERS: raw kept
+  problems: string[];
+  fromCache: boolean;
+};
+
+export function describeSummary(s: MatchSummary) {
+  if (s.fromCache) return "Snapped route loaded from cache";
+  return [
+    `${s.snapped} of ${s.total} points snapped`,
+    s.unmatched > 0 ? `${s.unmatched} had no street/trail nearby` : null,
+    s.rejected > 0 ? `${s.rejected} too far to snap` : null,
+    s.problems.length > 0 ? `problems: ${s.problems.join("; ")}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function log(message: string, ...rest: unknown[]) {
+  console.info(`[routeMatcher] ${message}`, ...rest);
+}
 
 type MatchedPoint = { lat?: number; lon?: number; type?: string };
 
@@ -28,7 +54,11 @@ function distanceMeters(a: LngLat, b: LngLat) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-async function matchChunk(chunk: LngLat[]): Promise<LngLat[] | null> {
+async function matchChunk(
+  chunk: LngLat[],
+  index: number,
+  summary: MatchSummary,
+): Promise<LngLat[] | null> {
   const response = await fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,30 +71,52 @@ async function matchChunk(chunk: LngLat[]): Promise<LngLat[] | null> {
     }),
     signal: AbortSignal.timeout(20000),
   });
+  log(`chunk ${index} (${chunk.length} pts): HTTP ${response.status}`);
+
   // 400/442 mean Valhalla found nothing to snap this chunk to: keep the raw
-  // points. Anything else (429, 5xx) is transient, so abort and don't cache.
-  if (response.status === 400 || response.status === 442) return null;
+  // points. Anything else (429, 5xx) is a failure worth surfacing.
+  if (response.status === 400 || response.status === 442) {
+    const body = (await response.text()).slice(0, 160);
+    summary.problems.push(`chunk ${index}: no match (HTTP ${response.status}) ${body}`);
+    return null;
+  }
   if (!response.ok) throw new Error(`Valhalla returned ${response.status}`);
 
   const matched: MatchedPoint[] = (await response.json()).matched_points ?? [];
-  if (matched.length !== chunk.length) return null;
+  if (matched.length !== chunk.length) {
+    summary.problems.push(
+      `chunk ${index}: got ${matched.length} matched points for ${chunk.length}`,
+    );
+    return null;
+  }
 
   return chunk.map((raw, i) => {
     const m = matched[i];
-    if (m.type === "unmatched" || m.lat == null || m.lon == null) return raw;
+    if (m.type === "unmatched" || m.lat == null || m.lon == null) {
+      summary.unmatched++;
+      return raw;
+    }
     const snapped: LngLat = [m.lon, m.lat];
-    return distanceMeters(raw, snapped) > MAX_SNAP_METERS ? raw : snapped;
+    if (distanceMeters(raw, snapped) > MAX_SNAP_METERS) {
+      summary.rejected++;
+      return raw;
+    }
+    return snapped;
   });
 }
 
-/** Returns the snapped route, or null if matching didn't run to completion. */
-async function matchRoute(raw: LngLat[]): Promise<LngLat[] | null> {
-  if (raw.length < 2) return raw;
+async function matchRoute(
+  raw: LngLat[],
+  summary: MatchSummary,
+): Promise<LngLat[]> {
   const result = raw.slice();
-  try {
-    for (let start = 0; start < raw.length - 1; start += CHUNK_SIZE) {
-      const end = Math.min(start + CHUNK_SIZE + OVERLAP, raw.length);
-      const snapped = await matchChunk(raw.slice(start, end));
+  if (raw.length < 2) return result;
+  let index = 0;
+  for (let start = 0; start < raw.length - 1; start += CHUNK_SIZE) {
+    const end = Math.min(start + CHUNK_SIZE + OVERLAP, raw.length);
+    index++;
+    try {
+      const snapped = await matchChunk(raw.slice(start, end), index, summary);
       if (!snapped) continue;
       // Each chunk carries a few extra trailing points so matching has
       // context at the seam; only the chunk's own points are kept.
@@ -72,10 +124,14 @@ async function matchRoute(raw: LngLat[]): Promise<LngLat[] | null> {
       for (let i = 0; i < take && i < snapped.length; i++) {
         result[start + i] = snapped[i];
       }
+    } catch (e) {
+      summary.problems.push(`chunk ${index}: ${e instanceof Error ? e.message : e}`);
+      log(`chunk ${index} failed`, e);
     }
-  } catch {
-    return null;
   }
+  summary.snapped = result.filter(
+    (p, i) => p[0] !== raw[i][0] || p[1] !== raw[i][1],
+  ).length;
   return result;
 }
 
@@ -85,27 +141,47 @@ function cacheKey(walkId: string, pointCount: number) {
 
 /**
  * Snapped route for a walk, cached in localStorage so each walk is only sent
- * to the matching service once per browser. A failed match resolves to the
- * raw route and is not cached.
+ * to the matching service once per browser. A failed match, or one that
+ * didn't actually move any points, is not cached so it is retried next time.
  */
-export async function snapRoute(walkId: string, raw: LngLat[]): Promise<LngLat[]> {
+export async function snapRoute(
+  walkId: string,
+  raw: LngLat[],
+): Promise<{ route: LngLat[]; summary: MatchSummary }> {
+  const summary: MatchSummary = {
+    total: raw.length,
+    snapped: 0,
+    unmatched: 0,
+    rejected: 0,
+    problems: [],
+    fromCache: false,
+  };
+
   const key = cacheKey(walkId, raw.length);
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
       const parsed = JSON.parse(cached) as LngLat[];
-      if (parsed.length === raw.length) return parsed;
+      if (parsed.length === raw.length) {
+        summary.fromCache = true;
+        log(`walk ${walkId}: snapped route from cache`);
+        return { route: parsed, summary };
+      }
     }
   } catch {
     // Unreadable cache entry: fall through and re-match.
   }
 
-  const snapped = await matchRoute(raw);
-  if (!snapped) return raw;
-  try {
-    localStorage.setItem(key, JSON.stringify(snapped));
-  } catch {
-    // Caching is best-effort (storage full or blocked).
+  log(`walk ${walkId}: matching ${raw.length} points`);
+  const route = await matchRoute(raw, summary);
+  log(`walk ${walkId}: ${describeSummary(summary)}`);
+
+  if (summary.problems.length === 0 && summary.snapped > 0) {
+    try {
+      localStorage.setItem(key, JSON.stringify(route));
+    } catch {
+      // Caching is best-effort (storage full or blocked).
+    }
   }
-  return snapped;
+  return { route, summary };
 }

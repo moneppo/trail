@@ -8,7 +8,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import rough from "roughjs";
 import { supabase } from "@/lib/supabaseClient";
 import { antiqueMapStyle } from "@/lib/antiqueMapStyle";
-import { snapRoute, type LngLat } from "@/lib/routeMatcher";
+import { describeSummary, snapRoute, type LngLat } from "@/lib/routeMatcher";
 import type { Walk, WalkPoint } from "@/lib/types";
 
 function formatDuration(seconds: number) {
@@ -36,6 +36,7 @@ function WalkDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [snap, setSnap] = useState(true);
   const [snapped, setSnapped] = useState<LngLat[] | null>(null);
+  const [snapStatus, setSnapStatus] = useState<string | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   // The route currently drawn on the canvas overlay. Kept in a ref so that
   // toggling snapping or receiving the snapped route only needs a repaint,
@@ -70,8 +71,10 @@ function WalkDetailContent() {
     snapRoute(
       params.id,
       points.map((p) => [p.lng, p.lat] as LngLat),
-    ).then((route) => {
-      if (!cancelled) setSnapped(route);
+    ).then(({ route, summary }) => {
+      if (cancelled) return;
+      setSnapped(route);
+      setSnapStatus(describeSummary(summary));
     });
     return () => {
       cancelled = true;
@@ -194,8 +197,10 @@ function WalkDetailContent() {
             onChange={(e) => setSnap(e.target.checked)}
           />
           Snap to streets and trails
-          {snap && !snapped && <span className="text-gray-500">(matching…)</span>}
         </label>
+        {snap && (
+          <p className="mt-1 text-xs text-gray-500">{snapStatus ?? "Matching…"}</p>
+        )}
       </div>
     </main>
   );

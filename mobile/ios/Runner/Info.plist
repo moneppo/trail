@@ -30,6 +30,8 @@
 	<string>Trail uses your location to record the route of your walks.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Trail uses your location to keep recording your walk route even when the app is in the background.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
