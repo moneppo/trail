@@ -8,6 +8,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import rough from "roughjs";
 import { supabase } from "@/lib/supabaseClient";
 import { antiqueMapStyle } from "@/lib/antiqueMapStyle";
+import { snapRoute, type LngLat } from "@/lib/routeMatcher";
 import type { Walk, WalkPoint } from "@/lib/types";
 
 function formatDuration(seconds: number) {
@@ -33,6 +34,13 @@ function WalkDetailContent() {
   const [walk, setWalk] = useState<Walk | null>(null);
   const [points, setPoints] = useState<WalkPoint[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [snap, setSnap] = useState(true);
+  const [snapped, setSnapped] = useState<LngLat[] | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  // The route currently drawn on the canvas overlay. Kept in a ref so that
+  // toggling snapping or receiving the snapped route only needs a repaint,
+  // not a rebuild of the whole map.
+  const routeRef = useRef<LngLat[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -57,6 +65,30 @@ function WalkDetailContent() {
   }, [params.id, router]);
 
   useEffect(() => {
+    if (!points || points.length === 0) return;
+    let cancelled = false;
+    setSnapped(null);
+    snapRoute(
+      params.id,
+      points.map((p) => [p.lng, p.lat] as LngLat),
+    ).then((route) => {
+      if (!cancelled) setSnapped(route);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [points, params.id]);
+
+  // Declared before the map effect so the ref is current when the map is
+  // first created.
+  useEffect(() => {
+    if (!points) return;
+    routeRef.current =
+      snap && snapped ? snapped : points.map((p) => [p.lng, p.lat] as LngLat);
+    mapRef.current?.triggerRepaint();
+  }, [points, snapped, snap]);
+
+  useEffect(() => {
     if (!mapContainer.current || !sketchCanvas.current || !points || points.length === 0) return;
 
     // Turbopack's asset pipeline breaks maplibre-gl's internal worker-loading
@@ -73,6 +105,7 @@ function WalkDetailContent() {
       center: coordinates[0],
       zoom: 14,
     });
+    mapRef.current = map;
 
     const canvas = sketchCanvas.current;
     const roughCanvas = rough.canvas(canvas);
@@ -95,8 +128,8 @@ function WalkDetailContent() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, clientWidth, clientHeight);
 
-      const screenPoints = coordinates.map((coord) => {
-        const p = map.project(coord as [number, number]);
+      const screenPoints = routeRef.current.map((coord) => {
+        const p = map.project(coord);
         return [p.x, p.y] as [number, number];
       });
 
@@ -121,6 +154,7 @@ function WalkDetailContent() {
     return () => {
       map.off("render", drawRoute);
       map.remove();
+      mapRef.current = null;
     };
   }, [points]);
 
@@ -153,6 +187,16 @@ function WalkDetailContent() {
             </p>
           </div>
         )}
+
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={snap}
+            onChange={(e) => setSnap(e.target.checked)}
+          />
+          Snap to streets and trails
+          {snap && !snapped && <span className="text-gray-500">(matching…)</span>}
+        </label>
       </div>
     </main>
   );

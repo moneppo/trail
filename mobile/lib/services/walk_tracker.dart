@@ -63,10 +63,19 @@ class WalkTracker {
     distance.value = 0;
     duration.value = Duration.zero;
 
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.best,
-      distanceFilter: 8,
-    );
+    final LocationSettings settings = defaultTargetPlatform == TargetPlatform.iOS
+        ? AppleSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 3,
+            activityType: ActivityType.fitness,
+            pauseLocationUpdatesAutomatically: false,
+            allowBackgroundLocationUpdates: true,
+            showBackgroundLocationIndicator: true,
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 3,
+          );
     _positionSub =
         Geolocator.getPositionStream(locationSettings: settings).listen(_onPosition);
     _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
