@@ -67,7 +67,6 @@ function WalkDetailContent() {
   useEffect(() => {
     if (!points || points.length === 0) return;
     let cancelled = false;
-    setSnapped(null);
     snapRoute(
       params.id,
       points.map((p) => [p.lng, p.lat] as LngLat),
