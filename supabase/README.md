@@ -6,6 +6,7 @@ This step requires your own Supabase account, so it isn't something I can do for
    - Pick any name (e.g. `trail`) and a database password (save it somewhere).
 2. Once the project finishes provisioning, open the **SQL Editor** in the left sidebar, paste in the contents of [`schema.sql`](./schema.sql), and run it.
    - This creates the `walks` and `walk_points` tables with Row Level Security policies that restrict each user to their own data.
+   - Then run each file in [`migrations/`](./migrations) in order. They add the later tables (`snapped_points`, `untracked_trails`), which the app and website need.
 3. Go to **Authentication > Providers** and confirm **Email** is enabled (it is by default). For the MVP we're using plain email/password auth — no email confirmation needed if you turn off "Confirm email" under Authentication > Settings, which is convenient while testing.
 4. Go to **Project Settings > API Keys** and copy:
    - **Project URL** (looks like `https://xxxxx.supabase.co`)

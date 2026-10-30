@@ -4,28 +4,44 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-/// What happened when a route was matched, for showing in the UI and logs.
-class MatchSummary {
-  int total = 0;
-  int snapped = 0; // moved onto a street/sidewalk/trail
-  int kept = 0; // Valhalla matched them but they were already on the line
-  int unmatched = 0; // Valhalla found nothing nearby: raw GPS kept
-  int rejected = 0; // snap would move the point > maxSnapMeters: raw GPS kept
-  int chunks = 0;
-  final List<String> problems = [];
-  bool fromCache = false;
+/// What the matcher did with one point. Stored as snapped_points.match_status.
+enum MatchStatus {
+  /// Snapped onto a known street, sidewalk or trail.
+  matched,
 
-  /// True when matching ran to completion and actually moved something.
-  bool get usable => problems.isEmpty && snapped > 0;
+  /// Nothing mapped nearby: the raw GPS position is kept.
+  unmatched,
 
-  @override
-  String toString() {
-    if (fromCache) return 'Snapped route loaded from cache';
+  /// The snap would have moved the point too far: the raw position is kept.
+  rejected,
+}
+
+class MatchResult {
+  final List<LatLng> route;
+  final List<MatchStatus> statuses;
+
+  /// Transient failures (network, rate limit, server error). When non-empty
+  /// the result is only a best effort and must not be stored.
+  final List<String> errors;
+
+  /// Chunks Valhalla answered "no match" for; their points are `unmatched`.
+  final List<String> notes;
+
+  MatchResult(this.route, this.statuses, this.errors, this.notes);
+
+  bool get complete => errors.isEmpty;
+  int count(MatchStatus s) => statuses.where((x) => x == s).length;
+
+  /// Human-readable summary for the UI and logs.
+  String describe() {
     final parts = [
-      '$snapped of $total points snapped',
-      if (unmatched > 0) '$unmatched had no street/trail nearby',
-      if (rejected > 0) '$rejected too far to snap',
-      if (problems.isNotEmpty) 'problems: ${problems.join('; ')}',
+      '${count(MatchStatus.matched)} of ${route.length} points snapped',
+      if (count(MatchStatus.unmatched) > 0)
+        '${count(MatchStatus.unmatched)} had no street/trail nearby',
+      if (count(MatchStatus.rejected) > 0)
+        '${count(MatchStatus.rejected)} too far to snap',
+      if (notes.isNotEmpty) notes.join('; '),
+      if (errors.isNotEmpty) 'problems: ${errors.join('; ')}',
     ];
     return parts.join(', ');
   }
@@ -36,7 +52,7 @@ class MatchSummary {
 ///
 /// Anything Valhalla can't match, or that would move a point further than
 /// [maxSnapMeters] from where we actually measured it, keeps its raw GPS
-/// position. On any network or API failure the raw track is returned.
+/// position and is marked accordingly in [MatchResult.statuses].
 class RouteMatcher {
   // Public FOSSGIS instance: fine for prototyping, but has fair-use limits.
   // Point this at a self-hosted Valhalla for heavier use.
@@ -54,42 +70,42 @@ class RouteMatcher {
 
   static void _log(String message) => debugPrint('[RouteMatcher] $message');
 
-  Future<({List<LatLng> route, MatchSummary summary})> match(
-      List<LatLng> raw) async {
-    final summary = MatchSummary()..total = raw.length;
-    if (raw.length < 2) return (route: raw, summary: summary);
+  Future<MatchResult> match(List<LatLng> raw) async {
+    final route = List<LatLng>.of(raw);
+    final statuses = List<MatchStatus>.filled(raw.length, MatchStatus.unmatched);
+    final errors = <String>[];
+    final notes = <String>[];
+    if (raw.length < 2) return MatchResult(route, statuses, errors, notes);
 
     _log('matching ${raw.length} points');
-    final result = List<LatLng>.of(raw);
+    var index = 0;
     for (var start = 0; start < raw.length - 1; start += _chunkSize) {
       final end = (start + _chunkSize + _overlap).clamp(0, raw.length);
-      summary.chunks++;
+      index++;
       try {
-        final snapped = await _matchChunk(raw.sublist(start, end), summary);
-        if (snapped == null) continue;
+        final chunk = await _matchChunk(raw.sublist(start, end), index, notes);
+        if (chunk == null) continue;
         // Each chunk carries a few extra trailing points so matching has
         // context at the seam; only the chunk's own points are kept.
         final take =
-            start + _chunkSize < raw.length ? _chunkSize : snapped.length;
-        for (var i = 0; i < take && i < snapped.length; i++) {
-          result[start + i] = snapped[i];
+            start + _chunkSize < raw.length ? _chunkSize : chunk.length;
+        for (var i = 0; i < take && i < chunk.length; i++) {
+          route[start + i] = chunk[i].$1;
+          statuses[start + i] = chunk[i].$2;
         }
       } catch (e) {
-        summary.problems.add('chunk ${summary.chunks}: $e');
-        _log('chunk ${summary.chunks} failed: $e');
+        errors.add('chunk $index: $e');
+        _log('chunk $index failed: $e');
       }
     }
 
-    summary.snapped = 0;
-    for (var i = 0; i < raw.length; i++) {
-      if (result[i] != raw[i]) summary.snapped++;
-    }
-    _log(summary.toString());
-    return (route: result, summary: summary);
+    final result = MatchResult(route, statuses, errors, notes);
+    _log(result.describe());
+    return result;
   }
 
-  Future<List<LatLng>?> _matchChunk(
-      List<LatLng> chunk, MatchSummary summary) async {
+  Future<List<(LatLng, MatchStatus)>?> _matchChunk(
+      List<LatLng> chunk, int index, List<String> notes) async {
     final response = await _client
         .post(
           _endpoint,
@@ -111,14 +127,12 @@ class RouteMatcher {
           }),
         )
         .timeout(const Duration(seconds: 20));
-    _log('chunk ${summary.chunks} (${chunk.length} pts): HTTP ${response.statusCode}');
+    _log('chunk $index (${chunk.length} pts): HTTP ${response.statusCode}');
 
-    // 400/442 mean Valhalla found nothing to snap this chunk to: keep raw.
+    // 400/442 mean Valhalla found nothing to snap this chunk to: all of its
+    // points are unmatched. Anything else (429, 5xx) is a transient failure.
     if (response.statusCode == 400 || response.statusCode == 442) {
-      final body = response.body.length > 160
-          ? response.body.substring(0, 160)
-          : response.body;
-      summary.problems.add('chunk ${summary.chunks}: no match (HTTP ${response.statusCode}) $body');
+      notes.add('chunk $index: no match (HTTP ${response.statusCode})');
       return null;
     }
     if (response.statusCode != 200) {
@@ -128,33 +142,25 @@ class RouteMatcher {
     final matched =
         (jsonDecode(response.body)['matched_points'] as List?) ?? const [];
     if (matched.length != chunk.length) {
-      summary.problems.add(
-          'chunk ${summary.chunks}: got ${matched.length} matched points for ${chunk.length}');
-      return null;
+      throw http.ClientException(
+          'got ${matched.length} matched points for ${chunk.length}');
     }
 
     return [
       for (var i = 0; i < chunk.length; i++)
-        _pick(chunk[i], matched[i] as Map<String, dynamic>, summary),
+        _pick(chunk[i], matched[i] as Map<String, dynamic>),
     ];
   }
 
-  LatLng _pick(LatLng raw, Map<String, dynamic> m, MatchSummary summary) {
-    if (m['type'] == 'unmatched') {
-      summary.unmatched++;
-      return raw;
-    }
+  (LatLng, MatchStatus) _pick(LatLng raw, Map<String, dynamic> m) {
+    if (m['type'] == 'unmatched') return (raw, MatchStatus.unmatched);
     final lat = (m['lat'] as num?)?.toDouble();
     final lon = (m['lon'] as num?)?.toDouble();
-    if (lat == null || lon == null) {
-      summary.unmatched++;
-      return raw;
-    }
+    if (lat == null || lon == null) return (raw, MatchStatus.unmatched);
     final snapped = LatLng(lat, lon);
     if (_distance(raw, snapped) > maxSnapMeters) {
-      summary.rejected++;
-      return raw;
+      return (raw, MatchStatus.rejected);
     }
-    return snapped;
+    return (snapped, MatchStatus.matched);
   }
 }

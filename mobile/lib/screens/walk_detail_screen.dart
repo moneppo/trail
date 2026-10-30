@@ -3,7 +3,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/walk.dart';
-import '../services/route_cache.dart';
 import '../services/route_matcher.dart';
 import '../services/supabase_service.dart';
 
@@ -33,19 +32,33 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   }
 
   Future<List<LatLng>> _snapRoute(List<LatLng> raw) async {
-    final cache = RouteCache();
-    final cached = await cache.read(widget.walk.id, raw.length);
-    if (cached != null) {
-      debugPrint('[WalkDetail] ${widget.walk.id}: snapped route from cache');
-      _setStatus('Snapped route loaded from cache');
-      return cached;
+    final id = widget.walk.id;
+    try {
+      final stored = await _service.fetchSnappedRoute(id);
+      if (stored.length == raw.length) {
+        debugPrint('[WalkDetail] $id: snapped route loaded from database');
+        _setStatus('Snapped route loaded from database');
+        return stored;
+      }
+    } catch (e) {
+      debugPrint('[WalkDetail] $id: reading snapped route failed: $e');
     }
 
     final result = await RouteMatcher().match(raw);
-    _setStatus(result.summary.toString());
-    // Only cache a route that actually snapped; a failed or empty match
-    // should be retried next time rather than remembered.
-    if (result.summary.usable) await cache.write(widget.walk.id, result.route);
+    var status = result.describe();
+    // Only store a match that ran to completion; a failed one is retried the
+    // next time the walk is opened.
+    if (result.complete) {
+      try {
+        await _service.saveSnappedRoute(id, result);
+        debugPrint('[WalkDetail] $id: saved ${raw.length} snapped points');
+        status += ' (saved)';
+      } catch (e) {
+        debugPrint('[WalkDetail] $id: saving snapped route failed: $e');
+        status += ' (could not save: $e)';
+      }
+    }
+    _setStatus(status);
     return result.route;
   }
 

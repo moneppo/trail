@@ -8,7 +8,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import rough from "roughjs";
 import { supabase } from "@/lib/supabaseClient";
 import { antiqueMapStyle } from "@/lib/antiqueMapStyle";
-import { describeSummary, snapRoute, type LngLat } from "@/lib/routeMatcher";
+import { describeResult, snapRoute, type LngLat } from "@/lib/routeMatcher";
+import { fetchAllByWalk } from "@/lib/walkData";
 import type { Walk, WalkPoint } from "@/lib/types";
 
 function formatDuration(seconds: number) {
@@ -51,16 +52,15 @@ function WalkDetailContent() {
       }
       Promise.all([
         supabase.from("walks").select("*").eq("id", params.id).single(),
-        supabase
-          .from("walk_points")
-          .select("*")
-          .eq("walk_id", params.id)
-          .order("sequence", { ascending: true }),
+        fetchAllByWalk<WalkPoint>("walk_points", params.id).then(
+          (data) => ({ data, error: null }),
+          (e: Error) => ({ data: null, error: e }),
+        ),
       ]).then(([walkRes, pointsRes]) => {
         if (walkRes.error) setError(walkRes.error.message);
         else setWalk(walkRes.data as Walk);
         if (pointsRes.error) setError(pointsRes.error.message);
-        else setPoints(pointsRes.data as WalkPoint[]);
+        else setPoints(pointsRes.data);
       });
     });
   }, [params.id, router]);
@@ -71,10 +71,10 @@ function WalkDetailContent() {
     snapRoute(
       params.id,
       points.map((p) => [p.lng, p.lat] as LngLat),
-    ).then(({ route, summary }) => {
+    ).then((result) => {
       if (cancelled) return;
-      setSnapped(route);
-      setSnapStatus(describeSummary(summary));
+      setSnapped(result.route);
+      setSnapStatus(describeResult(result));
     });
     return () => {
       cancelled = true;

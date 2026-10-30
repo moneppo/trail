@@ -1,6 +1,8 @@
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/walk.dart';
+import 'route_matcher.dart';
 import 'walk_tracker.dart';
 
 class SupabaseService {
@@ -52,14 +54,56 @@ class SupabaseService {
     return (rows as List).map((r) => Walk.fromJson(r as Map<String, dynamic>)).toList();
   }
 
+  // PostgREST caps a single response (1000 rows by default), and a walk
+  // recorded every few meters easily exceeds that, so read in pages.
+  static const _pageSize = 1000;
+
+  Future<List<Map<String, dynamic>>> _fetchAllByWalk(
+      String table, String walkId) async {
+    final rows = <Map<String, dynamic>>[];
+    for (var from = 0;; from += _pageSize) {
+      final page = await _client
+          .from(table)
+          .select()
+          .eq('walk_id', walkId)
+          .order('sequence', ascending: true)
+          .range(from, from + _pageSize - 1);
+      rows.addAll(page);
+      if (page.length < _pageSize) break;
+    }
+    return rows;
+  }
+
   Future<List<WalkPoint>> fetchWalkPoints(String walkId) async {
-    final rows = await _client
-        .from('walk_points')
-        .select()
-        .eq('walk_id', walkId)
-        .order('sequence', ascending: true);
-    return (rows as List)
-        .map((r) => WalkPoint.fromJson(r as Map<String, dynamic>))
-        .toList();
+    final rows = await _fetchAllByWalk('walk_points', walkId);
+    return rows.map(WalkPoint.fromJson).toList();
+  }
+
+  /// The stored snapped route for a walk, or an empty list if none is saved.
+  Future<List<LatLng>> fetchSnappedRoute(String walkId) async {
+    final rows = await _fetchAllByWalk('snapped_points', walkId);
+    return [
+      for (final r in rows)
+        LatLng((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble()),
+    ];
+  }
+
+  /// Stores a completed match. Upserts on (walk_id, sequence) so a partial
+  /// earlier save is repaired rather than duplicated.
+  Future<void> saveSnappedRoute(String walkId, MatchResult result) async {
+    const batch = 500;
+    for (var i = 0; i < result.route.length; i += batch) {
+      final end = (i + batch).clamp(0, result.route.length);
+      await _client.from('snapped_points').upsert([
+        for (var j = i; j < end; j++)
+          {
+            'walk_id': walkId,
+            'sequence': j,
+            'lat': result.route[j].latitude,
+            'lng': result.route[j].longitude,
+            'match_status': result.statuses[j].name,
+          },
+      ], onConflict: 'walk_id,sequence');
+    }
   }
 }
