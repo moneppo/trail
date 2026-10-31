@@ -135,7 +135,7 @@ async function matchRoute(raw: LngLat[]): Promise<MatchResult> {
   return { route, statuses, errors, notes, fromDatabase: false };
 }
 
-type SnappedRow = { lat: number; lng: number };
+type SnappedRow = { lat: number; lng: number; match_status: MatchStatus };
 
 /**
  * The snapped route for a walk. Reads the stored route from the database
@@ -150,7 +150,7 @@ export async function snapRoute(walkId: string, raw: LngLat[]): Promise<MatchRes
       log(`walk ${walkId}: snapped route loaded from database`);
       return {
         route: stored.map((r) => [r.lng, r.lat] as LngLat),
-        statuses: stored.map(() => "matched" as MatchStatus),
+        statuses: stored.map((r) => r.match_status),
         errors: [],
         notes: [],
         fromDatabase: true,

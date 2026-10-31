@@ -79,13 +79,46 @@ class SupabaseService {
     return rows.map(WalkPoint.fromJson).toList();
   }
 
-  /// The stored snapped route for a walk, or an empty list if none is saved.
-  Future<List<LatLng>> fetchSnappedRoute(String walkId) async {
+  /// The stored snapped route for a walk, or null if none is saved.
+  Future<MatchResult?> fetchSnappedRoute(String walkId) async {
     final rows = await _fetchAllByWalk('snapped_points', walkId);
+    if (rows.isEmpty) return null;
+    return MatchResult(
+      [
+        for (final r in rows)
+          LatLng((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble()),
+      ],
+      [
+        for (final r in rows)
+          MatchStatus.values.byName(r['match_status'] as String),
+      ],
+      const [],
+      const [],
+    );
+  }
+
+  /// Stretches of a walk already submitted as untracked trails, as
+  /// (start_sequence, end_sequence) pairs.
+  Future<List<(int, int)>> fetchUntrackedTrails(String walkId) async {
+    final rows = await _client
+        .from('untracked_trails')
+        .select('start_sequence, end_sequence')
+        .eq('walk_id', walkId);
     return [
       for (final r in rows)
-        LatLng((r['lat'] as num).toDouble(), (r['lng'] as num).toDouble()),
+        (r['start_sequence'] as int, r['end_sequence'] as int),
     ];
+  }
+
+  /// Submits a stretch as a candidate untracked trail.
+  Future<void> submitUntrackedTrail(String walkId, int start, int end) async {
+    await _client.from('untracked_trails').insert({
+      'user_id': currentUser!.id,
+      'walk_id': walkId,
+      'type': 'candidate',
+      'start_sequence': start,
+      'end_sequence': end,
+    });
   }
 
   /// Stores a completed match. Upserts on (walk_id, sequence) so a partial
