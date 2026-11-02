@@ -1,28 +1,221 @@
 @import "tailwindcss";
 
+/* Trail Cartography tokens. Day chart by default; night chart follows the
+   system setting. Values come from the design system's tokens.json. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --paper: #f8f7f2;
+  --paper-shade: #ddd3b5;
+  --ink: #1c1915;
+  --ink-soft: #4d463b;
+  --ink-faint: #7a7261;
+  --rule: #b8ad92;
+  --route: #8c2b22;
+  --on-route: #f8f7f2;
+  --unmapped: #8a5a10;
+  --candidate: #2f4a6b;
+  --accepted: #2b6a52;
+  --water-wash: #d5dde0;
+  --park-wash: #e1e6cf;
+  --contour: #9b9179;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-round: 999px;
+
+  --plate: 3px 3px 0 0 #1c1915;
+  --plate-sm: 2px 2px 0 0 #1c1915;
+
+  --stroke-hair: 0.75px;
+  --stroke-line: 1.5px;
+  --stroke-bold: 2.5px;
+
+  /* next/font sets --font-display, --font-body and --font-data on <html>. */
+  --ff-display: var(--font-display), "IM Fell English SC", Georgia, serif;
+  --ff-body: var(--font-body), "IM Fell English", Georgia, serif;
+  --ff-data: var(--font-data), "Barlow Condensed", "Arial Narrow", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #17150f;
+    --paper-shade: #322e23;
+    --ink: #ece4d0;
+    --ink-soft: #bfb59d;
+    --ink-faint: #8f8671;
+    --rule: #4d4636;
+    --route: #e4745f;
+    --on-route: #17150f;
+    --unmapped: #dca847;
+    --candidate: #94b5d9;
+    --accepted: #86c9a9;
+    --water-wash: #26313a;
+    --park-wash: #2a3022;
+    --contour: #6b634f;
+
+    --plate: 3px 3px 0 0 #ece4d0;
+    --plate-sm: 2px 2px 0 0 #ece4d0;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-route: var(--route);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--ff-body);
+  font-size: 17px;
+  line-height: 24px;
+}
+
+/* Type styles. */
+.tc-title-xl { font: 400 40px/44px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
+.tc-title-lg { font: 400 28px/32px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
+.tc-title-md { font: 400 20px/26px var(--ff-display); letter-spacing: 0.03em; margin: 0; }
+.tc-label { font: 600 13px/16px var(--ff-data); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
+.tc-data { font: 500 16px/20px var(--ff-data); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+.tc-caption { font: italic 400 14px/20px var(--ff-body); color: var(--ink-soft); }
+.tc-hint { font: italic 400 15px/21px var(--ff-body); color: var(--unmapped); }
+.tc-error { font: italic 400 15px/21px var(--ff-body); color: var(--route); }
+
+/* Buttons: square plates with a hard offset shadow. */
+.tc-btn {
+  font: 600 16px/18px var(--ff-data);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  border: var(--stroke-bold) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--plate);
+  cursor: pointer;
+}
+.tc-btn--primary { background: var(--route); color: var(--on-route); }
+.tc-btn--block { display: block; width: 100%; }
+.tc-btn:active { box-shadow: none; transform: translate(3px, 3px); }
+.tc-btn:disabled {
+  background: var(--paper-shade);
+  color: var(--ink-soft);
+  border-color: var(--ink-faint);
+  box-shadow: none;
+  cursor: default;
+}
+.tc-btn:focus-visible,
+.tc-close:focus-visible,
+.tc-link:focus-visible,
+.tc-switch:focus-visible,
+.tc-field input:focus-visible { outline: 3px solid var(--candidate); outline-offset: 3px; }
+
+.tc-close {
+  width: 44px;
+  height: 44px;
+  display: inline-grid;
+  place-items: center;
+  border: var(--stroke-bold) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--plate-sm);
+  font: 400 26px/1 var(--ff-body);
+  cursor: pointer;
+  text-decoration: none;
+}
+.tc-close:active { box-shadow: none; transform: translate(2px, 2px); }
+
+.tc-link {
+  color: var(--candidate);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Cartouche and panels: same paper as the page, set apart by ink borders. */
+.tc-cartouche {
+  position: relative;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--stroke-bold) solid var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-6) var(--space-4);
+}
+.tc-cartouche::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: var(--stroke-hair) solid var(--ink);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+.tc-panel {
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--stroke-bold) solid var(--ink);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--plate);
+}
+
+.tc-field { display: grid; gap: var(--space-1); }
+.tc-field input {
+  font: 400 17px/24px var(--ff-body);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: var(--stroke-line) solid var(--ink);
+  border-radius: 0;
+  padding: var(--space-2) 0;
+}
+.tc-field input::placeholder { color: var(--ink-soft); }
+
+.tc-switch {
+  flex-shrink: 0;
+  width: 52px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 2px;
+  display: flex;
+  justify-content: flex-start;
+  background: var(--paper-shade);
+  border: var(--stroke-bold) solid var(--ink);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.tc-switch[aria-checked="true"] { justify-content: flex-end; background: var(--route); }
+.tc-switch > span {
+  display: block;
+  width: 18px;
+  height: 100%;
+  background: var(--paper);
+  border: var(--stroke-line) solid var(--ink);
+  border-radius: 1px;
+}
+
+.tc-strip {
+  position: relative;
+  height: 14px;
+  box-sizing: border-box;
+  border: var(--stroke-line) solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--paper-shade);
+  overflow: hidden;
+  display: flex;
 }
 
 /* Two overlapping range inputs forming one dual-handle slider. The tracks are
@@ -31,7 +224,7 @@ body {
 .dual-range input[type="range"] {
   position: absolute;
   left: 0;
-  top: 8px;
+  top: 0;
   width: 100%;
   margin: 0;
   background: transparent;
@@ -40,31 +233,52 @@ body {
   appearance: none;
 }
 .dual-range input[type="range"]::-webkit-slider-runnable-track {
-  height: 8px;
+  height: 28px;
   background: transparent;
 }
 .dual-range input[type="range"]::-moz-range-track {
-  height: 8px;
+  height: 28px;
   background: transparent;
 }
 .dual-range input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   pointer-events: auto;
-  width: 18px;
-  height: 18px;
-  margin-top: -5px;
-  border-radius: 50%;
-  border: 2px solid #534ab7;
-  background: #fff;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-round);
+  border: var(--stroke-bold) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--plate-sm);
   cursor: grab;
 }
 .dual-range input[type="range"]::-moz-range-thumb {
   pointer-events: auto;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid #534ab7;
-  background: #fff;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-round);
+  border: var(--stroke-bold) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--plate-sm);
   cursor: grab;
+}
+.dual-range input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--candidate); outline-offset: 3px; }
+.dual-range input[type="range"]:focus-visible::-moz-range-thumb { outline: 3px solid var(--candidate); outline-offset: 3px; }
+
+/* MapLibre scale bar, drawn like the map's own furniture. */
+.maplibregl-ctrl-scale {
+  background: var(--paper) !important;
+  color: var(--ink) !important;
+  border: var(--stroke-line) solid var(--ink) !important;
+  border-top: 0 !important;
+  font: 600 11px/14px var(--ff-data) !important;
+  letter-spacing: 0.1em;
+}
+.maplibregl-ctrl-attrib { background: var(--paper) !important; color: var(--ink-soft) !important; }
+.maplibregl-ctrl-attrib a { color: var(--ink-soft) !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tc-btn:active, .tc-close:active { transform: none; }
 }

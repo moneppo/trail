@@ -7,9 +7,11 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import rough from "roughjs";
 import { supabase } from "@/lib/supabaseClient";
-import { antiqueMapStyle } from "@/lib/antiqueMapStyle";
+import { inkMapStyle } from "@/lib/inkMapStyle";
+import { Compass } from "@/components/Compass";
 import {
   describeResult,
+  distanceMeters,
   snapRoute,
   type LngLat,
   type MatchStatus,
@@ -20,10 +22,23 @@ import type { Walk, WalkPoint } from "@/lib/types";
 
 type Range = [number, number];
 
-const INK = "#7a1f1f";
-const MATCHED = "#1D9E75";
-const UNMAPPED = "#BA7517";
-const TRAIL = "#534AB7";
+// Canvas colors come from the design system's CSS variables so the walk drawing
+// follows the day or night chart.
+function palette() {
+  const css = getComputedStyle(document.documentElement);
+  const read = (name: string) => css.getPropertyValue(name).trim();
+  return {
+    paper: read("--paper"),
+    ink: read("--ink"),
+    route: read("--route"),
+    unmapped: read("--unmapped"),
+    candidate: read("--candidate"),
+  };
+}
+
+const ROUTE_WIDTH = 4;
+const TRAIL_WIDTH = 6;
+const UNMAPPED_DASH = [10, 7];
 // How close (in screen pixels) a click must land to a dashed section to open it.
 const HIT_PX = 20;
 
@@ -162,10 +177,11 @@ function WalkDetailContent() {
     const coordinates = points.map((p) => [p.lng, p.lat] as [number, number]);
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: antiqueMapStyle,
+      style: inkMapStyle(window.matchMedia("(prefers-color-scheme: dark)").matches),
       center: coordinates[0],
       zoom: 14,
     });
+    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
     mapRef.current = map;
 
     const canvas = sketchCanvas.current;
@@ -199,52 +215,92 @@ function WalkDetailContent() {
       const screen = route.map(project);
       const line = (from: number, to: number) =>
         screen.slice(Math.max(0, from), Math.min(screen.length, to + 1));
-      const base = { roughness: 1.8, bowing: 1.5, seed: 1 };
+      const colors = palette();
+      // A low roughness keeps the line legible while it still reads as pen.
+      const base = { roughness: 1.2, bowing: 1, seed: 1 };
+
+      // A paper halo under a stroke so it separates from roads and the route.
+      const traceLine = (pts: [number, number][], width: number) => {
+        if (pts.length === 0) return;
+        ctx.save();
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = colors.paper;
+        ctx.beginPath();
+        pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.stroke();
+        ctx.restore();
+      };
+      traceLine(screen, ROUTE_WIDTH + 6);
 
       if (gaps.length === 0) {
-        roughCanvas.linearPath(screen, { ...base, stroke: INK, strokeWidth: 3 });
+        roughCanvas.linearPath(screen, { ...base, stroke: colors.route, strokeWidth: ROUTE_WIDTH });
       } else {
         // Mapped stretches solid, unmapped (clickable) sections dashed.
         let from = 0;
         for (const [start, end] of gaps) {
-          roughCanvas.linearPath(line(from, start), { ...base, stroke: MATCHED, strokeWidth: 3 });
+          roughCanvas.linearPath(line(from, start), {
+            ...base,
+            stroke: colors.route,
+            strokeWidth: ROUTE_WIDTH,
+          });
           roughCanvas.linearPath(line(start - 1, end + 1), {
             ...base,
-            stroke: UNMAPPED,
-            strokeWidth: 3,
-            strokeLineDash: [10, 8],
+            stroke: colors.unmapped,
+            strokeWidth: ROUTE_WIDTH,
+            strokeLineDash: UNMAPPED_DASH,
           });
           from = end;
         }
-        roughCanvas.linearPath(line(from, screen.length), { ...base, stroke: MATCHED, strokeWidth: 3 });
+        roughCanvas.linearPath(line(from, screen.length), {
+          ...base,
+          stroke: colors.route,
+          strokeWidth: ROUTE_WIDTH,
+        });
       }
 
       for (const [start, end] of trailsRef.current) {
-        roughCanvas.linearPath(line(start, end), { ...base, stroke: TRAIL, strokeWidth: 5 });
+        traceLine(line(start, end), TRAIL_WIDTH + 6);
+        roughCanvas.linearPath(line(start, end), {
+          ...base,
+          stroke: colors.candidate,
+          strokeWidth: TRAIL_WIDTH,
+        });
       }
 
       const sel = selectionRef.current;
       if (sel) {
         const part = line(sel[0], sel[1]);
+        traceLine(part, TRAIL_WIDTH + 8);
+        roughCanvas.linearPath(part, { ...base, stroke: colors.candidate, strokeWidth: TRAIL_WIDTH });
+      }
+
+      // Start is an open circle, end a circle with a solid center; the two
+      // selection handles are open circles too.
+      const marker = ([x, y]: [number, number], filled: boolean, radius = 9) => {
         ctx.save();
-        ctx.lineWidth = 12;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = "rgba(127,119,221,0.45)";
         ctx.beginPath();
-        part.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = colors.paper;
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = colors.ink;
         ctx.stroke();
-        for (const i of sel) {
-          if (!screen[i]) continue;
+        if (filled) {
           ctx.beginPath();
-          ctx.arc(screen[i][0], screen[i][1], 8, 0, Math.PI * 2);
-          ctx.fillStyle = "#fff";
+          ctx.arc(x, y, radius - 4, 0, Math.PI * 2);
+          ctx.fillStyle = colors.ink;
           ctx.fill();
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = TRAIL;
-          ctx.stroke();
         }
         ctx.restore();
+      };
+      if (screen.length > 1) {
+        marker(screen[0], false);
+        marker(screen[screen.length - 1], true);
+      }
+      if (sel) {
+        for (const i of sel) if (screen[i]) marker(screen[i], false, 11);
       }
     }
 
@@ -313,6 +369,17 @@ function WalkDetailContent() {
 
   const lastIndex = (statuses?.length ?? 1) - 1;
 
+  // Length in metres of the stretch being adjusted, along the drawn route.
+  const selectionMeters = useMemo(() => {
+    const route = snap && snapped ? snapped : (points ?? []).map((p) => [p.lng, p.lat] as LngLat);
+    if (!selection) return 0;
+    let total = 0;
+    for (let i = selection[0] + 1; i <= selection[1] && i < route.length; i++) {
+      total += distanceMeters(route[i - 1], route[i]);
+    }
+    return total;
+  }, [selection, snap, snapped, points]);
+
   function closePanel() {
     setSelection(null);
     setSubmitError(null);
@@ -339,81 +406,100 @@ function WalkDetailContent() {
       <div ref={mapContainer} className="absolute inset-0 h-full w-full" />
       <canvas ref={sketchCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
 
-      <div className="absolute top-4 left-4 z-10 max-w-xs rounded-lg border border-black/10 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-black/80">
-        <Link href="/walks" className="text-sm underline">
-          ← Back to walks
-        </Link>
+      <Compass size={72} className="pointer-events-none absolute top-4 right-4 z-10" />
 
-        {error && <p className="mt-2 text-red-600">{error}</p>}
-
-        {walk && (
-          <div className="mt-2">
-            <h1 className="text-2xl font-semibold">
-              {(walk.distance_meters / 1000).toFixed(2)} km
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              {new Date(walk.started_at).toLocaleString()} ·{" "}
-              {formatDuration(walk.duration_seconds)} ·{" "}
-              {(
-                walk.duration_seconds /
-                60 /
-                (walk.distance_meters / 1000 || 1)
-              ).toFixed(1)}{" "}
-              min/km
-            </p>
+      <div className="tc-panel absolute top-4 left-4 z-10 flex w-[min(22rem,calc(100%-7rem))] flex-col gap-3 p-4">
+        <div className="flex items-start gap-3">
+          <Link href="/walks" aria-label="Back to walks" className="tc-close shrink-0">
+            ‹
+          </Link>
+          <div className="min-w-0">
+            {error && <p className="tc-error">{error}</p>}
+            {walk && (
+              <>
+                <h1 className="tc-title-md">{(walk.distance_meters / 1000).toFixed(2)} km</h1>
+                <p className="tc-data text-[var(--ink-soft)]">
+                  {new Date(walk.started_at).toLocaleString()} · {formatDuration(walk.duration_seconds)}
+                </p>
+              </>
+            )}
           </div>
-        )}
+        </div>
 
-        <label className="mt-3 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={snap}
-            onChange={(e) => {
-              setSnap(e.target.checked);
+        <div className="flex items-center justify-between gap-3">
+          <span id="snap-label" className="tc-label">
+            Snap to streets and trails
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={snap}
+            aria-labelledby="snap-label"
+            className="tc-switch"
+            onClick={() => {
+              setSnap(!snap);
               closePanel();
             }}
-          />
-          Snap to streets and trails
-        </label>
-        {snap && (
-          <p className="mt-1 text-xs text-gray-500">{snapStatus ?? "Matching…"}</p>
+          >
+            <span />
+          </button>
+        </div>
+        {snap && <p className="tc-caption">{snapStatus ?? "Matching…"}</p>}
+
+        {snap && statuses && (
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <div className="flex items-center gap-2">
+              <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true">
+                <path d="M2 5 H34" stroke="var(--route)" strokeWidth="4" strokeLinecap="round" />
+              </svg>
+              <span className="tc-label">On the map</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true">
+                <path
+                  d="M2 5 H34"
+                  stroke="var(--unmapped)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="10 7"
+                />
+              </svg>
+              <span className="tc-label">Unmapped</span>
+            </div>
+          </div>
         )}
         {snap && gaps.length > 0 && !selection && (
-          <p className="mt-1 text-xs text-gray-500">
-            Click a dashed section to mark it as a trail.
-          </p>
+          <p className="tc-hint">Click a dashed stretch to mark it as a trail.</p>
         )}
       </div>
 
       {snap && selection && (
-        <div className="absolute bottom-4 left-1/2 z-10 w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 rounded-lg border border-black/10 bg-white/95 p-3 shadow-lg backdrop-blur-sm dark:border-white/10 dark:bg-black/85">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={closePanel}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-lg leading-none hover:bg-black/10 dark:hover:bg-white/10"
-            >
+        <div className="tc-panel absolute bottom-10 left-1/2 z-10 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-4 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="tc-title-md">Mark an untracked trail</h2>
+            <button type="button" aria-label="Close" onClick={closePanel} className="tc-close shrink-0">
               ×
             </button>
           </div>
 
-          <div className="dual-range relative mt-1 h-6">
-            <div className="absolute inset-x-[9px] top-2 flex h-2 overflow-hidden rounded">
-              {runs.map((r, i) => (
+          <div className="dual-range relative h-7">
+            <div className="absolute inset-x-[14px] top-[7px]">
+              <div className="tc-strip">
+                {runs.map((r, i) => (
+                  <div
+                    key={i}
+                    style={{ flexGrow: r.length, background: r.mapped ? "var(--route)" : "var(--unmapped)" }}
+                  />
+                ))}
                 <div
-                  key={i}
-                  style={{ flexGrow: r.length, background: r.mapped ? MATCHED : UNMAPPED }}
+                  className="absolute inset-y-0"
+                  style={{
+                    left: `${(selection[0] / lastIndex) * 100}%`,
+                    width: `${((selection[1] - selection[0]) / lastIndex) * 100}%`,
+                    background: "var(--candidate)",
+                  }}
                 />
-              ))}
-              <div
-                className="absolute inset-y-0"
-                style={{
-                  left: `${(selection[0] / lastIndex) * 100}%`,
-                  width: `${((selection[1] - selection[0]) / lastIndex) * 100}%`,
-                  background: "rgba(127,119,221,0.45)",
-                }}
-              />
+              </div>
             </div>
             <input
               type="range"
@@ -443,13 +529,17 @@ function WalkDetailContent() {
             />
           </div>
 
-          {submitError && <p className="mt-2 text-sm text-red-600">{submitError}</p>}
+          <div className="tc-data flex justify-between gap-4">
+            <span>Point {selection[0] + 1}</span>
+            <span>
+              {selection[1] - selection[0] + 1} points · {Math.round(selectionMeters)} m
+            </span>
+            <span>Point {selection[1] + 1}</span>
+          </div>
 
-          <button
-            type="button"
-            onClick={submit}
-            className="mt-3 w-full rounded-md bg-black py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
-          >
+          {submitError && <p className="tc-error">{submitError}</p>}
+
+          <button type="button" onClick={submit} className="tc-btn tc-btn--primary tc-btn--block">
             Submit
           </button>
         </div>

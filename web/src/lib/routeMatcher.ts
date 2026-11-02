@@ -54,7 +54,7 @@ function log(message: string, ...rest: unknown[]) {
   console.info(`[routeMatcher] ${message}`, ...rest);
 }
 
-function distanceMeters(a: LngLat, b: LngLat) {
+export function distanceMeters(a: LngLat, b: LngLat) {
   const R = 6371000;
   const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(b[1] - a[1]);

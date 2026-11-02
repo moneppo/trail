@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/trail_theme.dart';
 
 Future<void> main() async {
   await dotenv.load();
@@ -21,7 +22,9 @@ class TrailApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Trail',
-      theme: ThemeData(colorSchemeSeed: Colors.green, useMaterial3: true),
+      theme: trailTheme(Brightness.light),
+      darkTheme: trailTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       home: const AuthGate(),
     );
   }

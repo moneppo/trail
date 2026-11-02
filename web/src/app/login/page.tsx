@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { Compass } from "@/components/Compass";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,48 +31,45 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm flex flex-col gap-4"
-      >
-        <h1 className="text-2xl font-semibold text-center">
-          {isSignUp ? "Create an account" : "Sign in to Trail"}
-        </h1>
-        <input
-          type="email"
-          placeholder="Email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="border rounded px-3 py-2"
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="border rounded px-3 py-2"
-        />
-        {error && <p className="text-red-600 text-sm">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-green-600 text-white rounded px-3 py-2 disabled:opacity-50"
-        >
-          {loading ? "..." : isSignUp ? "Sign up" : "Sign in"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
-          className="text-sm text-gray-600 underline"
-        >
-          {isSignUp
-            ? "Already have an account? Sign in"
-            : "No account? Sign up"}
-        </button>
-      </form>
+    <main className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
+      <Compass />
+      <div className="tc-cartouche w-full max-w-sm">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <div className="text-center">
+            <h1 className="tc-title-xl">{isSignUp ? "Join Trail" : "Trail"}</h1>
+            <p className="tc-caption mt-1">Walks, drawn in ink on paper</p>
+          </div>
+          <label className="tc-field">
+            <span className="tc-label">Email</span>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+          <label className="tc-field">
+            <span className="tc-label">Password</span>
+            <input
+              type="password"
+              placeholder="At least 8 characters"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error && <p className="tc-error">{error}</p>}
+          <button type="submit" disabled={loading} className="tc-btn tc-btn--primary tc-btn--block">
+            {loading ? "Please wait" : isSignUp ? "Sign up" : "Sign in"}
+          </button>
+          <div className="text-center">
+            <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="tc-link">
+              {isSignUp ? "I already have an account" : "Create an account"}
+            </button>
+          </div>
+        </form>
+      </div>
     </main>
   );
 }

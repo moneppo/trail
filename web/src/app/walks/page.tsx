@@ -40,37 +40,39 @@ export default function WalksPage() {
     router.replace("/login");
   }
 
+  const totalKm = (walks ?? []).reduce((sum, w) => sum + w.distance_meters, 0) / 1000;
+
   return (
-    <main className="flex-1 max-w-2xl mx-auto w-full p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Your walks</h1>
-        <button onClick={handleSignOut} className="text-sm underline">
+    <main className="flex-1 max-w-2xl mx-auto w-full px-4 pb-12">
+      <header className="flex items-end justify-between gap-4 border-b-[2.5px] border-ink pt-12 pb-4">
+        <div>
+          <p className="tc-label">
+            {walks ? `${walks.length} ${walks.length === 1 ? "walk" : "walks"} · ${totalKm.toFixed(1)} km` : " "}
+          </p>
+          <h1 className="tc-title-xl">Your walks</h1>
+        </div>
+        <button onClick={handleSignOut} className="tc-link">
           Sign out
         </button>
-      </div>
+      </header>
+      <div className="h-1 border-b-[0.75px] border-ink" />
 
-      {error && <p className="text-red-600">{error}</p>}
-      {walks === null && !error && <p>Loading…</p>}
-      {walks?.length === 0 && <p>No walks yet. Go for one!</p>}
+      {error && <p className="tc-error mt-4">{error}</p>}
+      {walks === null && !error && <p className="tc-caption mt-4">Loading walks…</p>}
+      {walks?.length === 0 && <p className="tc-caption mt-4">No walks yet. Go for one.</p>}
 
-      <ul className="divide-y">
+      <ul>
         {walks?.map((walk) => (
-          <li key={walk.id}>
+          <li key={walk.id} className="border-b-[0.75px] border-[var(--rule)]">
             <Link
               href={`/walks/${walk.id}`}
-              className="flex items-center justify-between py-3 hover:bg-gray-50"
+              className="flex items-center justify-between gap-4 py-4 hover:underline decoration-dashed underline-offset-4"
             >
               <div>
-                <p className="font-medium">
-                  {(walk.distance_meters / 1000).toFixed(2)} km
-                </p>
-                <p className="text-sm text-gray-600">
-                  {new Date(walk.started_at).toLocaleString()}
-                </p>
+                <p className="tc-label">{new Date(walk.started_at).toLocaleString()}</p>
+                <p className="tc-title-md">{(walk.distance_meters / 1000).toFixed(2)} km</p>
               </div>
-              <span className="text-gray-700">
-                {formatDuration(walk.duration_seconds)}
-              </span>
+              <span className="tc-data">{formatDuration(walk.duration_seconds)}</span>
             </Link>
           </li>
         ))}

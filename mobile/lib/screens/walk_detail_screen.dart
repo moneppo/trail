@@ -6,13 +6,13 @@ import '../models/walk.dart';
 import '../services/route_matcher.dart';
 import '../services/supabase_service.dart';
 import '../services/unmapped_runs.dart';
-
-const _matchedColor = Color(0xFF1D9E75);
-const _unmappedColor = Color(0xFFBA7517);
-const _trailColor = Color(0xFF534AB7);
+import '../theme/trail_theme.dart';
+import '../widgets/trail_widgets.dart';
 
 /// Fewest points a submitted trail can span (about 15 m at 3 m spacing).
 const _minTrailPoints = 5;
+
+const _distance = Distance();
 
 class WalkDetailScreen extends StatefulWidget {
   final Walk walk;
@@ -164,82 +164,178 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       start.clamp(0, route.length), (end + 1).clamp(0, route.length));
 
   /// Route segments between the unmapped gaps, drawn as solid lines.
-  List<Polyline> _solidSegments(List<LatLng> route, List<(int, int)> gaps) {
+  List<Polyline> _solidSegments(
+      TrailColors c, List<LatLng> route, List<(int, int)> gaps) {
     final lines = <Polyline>[];
     var from = 0;
     for (final g in [...gaps, (route.length, route.length)]) {
       final segment = _slice(route, from, g.$1);
       if (segment.length > 1) {
-        lines.add(
-            Polyline(points: segment, strokeWidth: 4, color: _matchedColor));
+        lines.add(_penLine(c, segment, strokeRoute, c.route));
       }
       from = g.$2;
     }
     return lines;
   }
 
+  /// A solid stroke with a paper halo so it separates from the roads under it.
+  Polyline _penLine(
+          TrailColors c, List<LatLng> points, double width, Color color) =>
+      Polyline(
+        points: points,
+        strokeWidth: width,
+        color: color,
+        borderStrokeWidth: 3,
+        borderColor: c.paper,
+        strokeCap: StrokeCap.round,
+        strokeJoin: StrokeJoin.round,
+      );
+
   @override
   Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
     final walk = widget.walk;
+    final started = '${walk.startedAt.toLocal()}'.split('.').first;
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${walk.startedAt.toLocal()}'.split('.').first),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _Stat(
-                  label: 'Distance',
-                  value: '${(walk.distanceMeters / 1000).toStringAsFixed(2)} km',
-                ),
-                _Stat(
-                  label: 'Duration',
-                  value: _formatDuration(walk.durationSeconds),
-                ),
-              ],
-            ),
-          ),
-          SwitchListTile(
-            dense: true,
-            title: const Text('Snap to streets and trails'),
-            value: _snap,
-            onChanged: (v) => setState(() {
-              _snap = v;
-              _selection = null;
-            }),
-          ),
-          if (_snap)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                _snapStatus ?? 'Matching…',
-                style: Theme.of(context).textTheme.bodySmall,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              decoration: BoxDecoration(
+                color: c.paper,
+                border: Border(
+                    bottom: BorderSide(color: c.ink, width: strokeBold)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      SquareGlyphButton(
+                        glyph: '‹',
+                        semanticLabel: 'Back',
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${(walk.distanceMeters / 1000).toStringAsFixed(2)} km',
+                              style: TrailText.titleMd(c),
+                            ),
+                            Text(
+                              '$started · ${_formatDuration(walk.durationSeconds)}',
+                              style: TrailText.data(c)
+                                  .copyWith(color: c.inkSoft, fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Expanded(child: LabelText('Snap to streets and trails')),
+                      const SizedBox(width: 12),
+                      TrailSwitch(
+                        value: _snap,
+                        semanticLabel: 'Snap to streets and trails',
+                        onChanged: (v) => setState(() {
+                          _snap = v;
+                          _selection = null;
+                        }),
+                      ),
+                    ],
+                  ),
+                  if (_snap)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        _snapStatus ?? 'Matching…',
+                        style: TrailText.caption(c),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
               ),
             ),
-          Expanded(child: _buildMap(context)),
-          if (_selection != null) _buildPanel(context),
-        ],
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: _buildMap(context, c)),
+                  const Positioned(top: 12, right: 12, child: Compass(size: 56)),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _selection != null
+                        ? _buildPanel(context, c)
+                        : _buildLegend(context, c),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildMap(BuildContext context) {
-    if (_loadError != null) return Center(child: Text('Error: $_loadError'));
+  Widget _buildMap(BuildContext context, TrailColors c) {
+    if (_loadError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('Could not load this walk: $_loadError',
+            style: TrailText.error(c)),
+      );
+    }
     final raw = _raw;
     if (raw == null) return const Center(child: CircularProgressIndicator());
-    if (raw.isEmpty) return const Center(child: Text('No route recorded.'));
+    if (raw.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text('No route recorded.', style: TrailText.caption(c)),
+      );
+    }
 
     final snapped = _snap ? _snapped : null;
     final route = snapped?.route ?? raw;
     final gaps = _gaps;
     final sel = _selection;
 
+    Marker marker(LatLng at, {bool filled = false, double size = 22}) => Marker(
+          point: at,
+          width: size,
+          height: size,
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.paper,
+              shape: BoxShape.circle,
+              border: Border.all(color: c.ink, width: strokeBold),
+            ),
+            child: filled
+                ? Center(
+                    child: Container(
+                      width: size / 2.4,
+                      height: size / 2.4,
+                      decoration:
+                          BoxDecoration(color: c.ink, shape: BoxShape.circle),
+                    ),
+                  )
+                : null,
+          ),
+        );
+
     return FlutterMap(
       options: MapOptions(
+        backgroundColor: c.paper,
         initialCameraFit: route.length > 1
             ? CameraFit.coordinates(
                 coordinates: route,
@@ -250,34 +346,26 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
         initialZoom: 16,
       ),
       children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.moneppo.trail',
+        // The colored street tiles are filtered down to ink on paper.
+        ColorFiltered(
+          colorFilter: inkTileFilter(Theme.of(context).brightness),
+          child: TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.moneppo.trail',
+          ),
         ),
         if (snapped == null)
-          PolylineLayer(polylines: [
-            Polyline(
-              points: route,
-              strokeWidth: 5,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ])
+          PolylineLayer(polylines: [_penLine(c, route, strokeRoute, c.route)])
         else
-          PolylineLayer(polylines: _solidSegments(route, gaps)),
+          PolylineLayer(polylines: _solidSegments(c, route, gaps)),
         PolylineLayer(polylines: [
           for (final t in _trails)
-            Polyline(
-                points: _slice(route, t.$1, t.$2),
-                strokeWidth: 6,
-                color: _trailColor),
+            _penLine(c, _slice(route, t.$1, t.$2), strokeTrail, c.candidate),
         ]),
         if (sel != null)
           PolylineLayer(polylines: [
-            Polyline(
-              points: _slice(route, sel.start.round(), sel.end.round()),
-              strokeWidth: 14,
-              color: _trailColor.withValues(alpha: 0.4),
-            ),
+            _penLine(c, _slice(route, sel.start.round(), sel.end.round()),
+                strokeTrail, c.candidate),
           ]),
         // Tapping a dashed section opens the panel. The wide hit box makes
         // the thin dashed line easy to hit with a finger.
@@ -294,29 +382,23 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               for (var i = 0; i < gaps.length; i++)
                 Polyline<int>(
                   points: _slice(route, gaps[i].$1 - 1, gaps[i].$2 + 1),
-                  strokeWidth: 4,
-                  color: _unmappedColor,
-                  pattern: StrokePattern.dashed(segments: const [8, 8]),
+                  strokeWidth: strokeRoute,
+                  color: c.unmapped,
+                  pattern: StrokePattern.dashed(segments: dashUnmapped),
                   hitValue: i,
                 ),
             ],
           ),
         ),
+        if (route.length > 1)
+          MarkerLayer(markers: [
+            marker(route.first),
+            marker(route.last, filled: true),
+          ]),
         if (sel != null)
           MarkerLayer(markers: [
             for (final i in [sel.start.round(), sel.end.round()])
-              Marker(
-                point: route[i],
-                width: 20,
-                height: 20,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: _trailColor, width: 2.5),
-                  ),
-                ),
-              ),
+              marker(route[i], size: 26),
           ]),
         const RichAttributionWidget(
           attributions: [
@@ -327,10 +409,63 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
     );
   }
 
-  Widget _buildPanel(BuildContext context) {
-    final statuses = _snapped!.statuses;
+  Widget _legendEntry(TrailColors c, Color color, String label,
+      {bool dashed = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 36,
+          height: 10,
+          child: CustomPaint(
+              painter: _SwatchPainter(color: color, dashed: dashed)),
+        ),
+        const SizedBox(width: 8),
+        LabelText(label),
+      ],
+    );
+  }
+
+  /// What the map's lines mean, plus the hint that dashed stretches are tappable.
+  Widget _buildLegend(BuildContext context, TrailColors c) {
+    if (!_snap || _snapped == null) return const SizedBox.shrink();
+    final gaps = _gaps;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          16, 14, 16, 14 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: c.paper,
+        border: Border(top: BorderSide(color: c.ink, width: strokeBold)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            spacing: 24,
+            runSpacing: 8,
+            children: [
+              _legendEntry(c, c.route, 'On the map'),
+              _legendEntry(c, c.unmapped, 'Unmapped', dashed: true),
+            ],
+          ),
+          if (gaps.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Tap a dashed stretch to mark it as a trail.',
+                style: TrailText.hint(c)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context, TrailColors c) {
+    final snapped = _snapped!;
+    final statuses = snapped.statuses;
+    final route = snapped.route;
     final sel = _selection!;
-    final scheme = Theme.of(context).colorScheme;
+    final start = sel.start.round();
+    final end = sel.end.round();
 
     // Colour strip of the whole walk: mapped vs unmapped stretches.
     final runs = <(bool, int)>[];
@@ -343,112 +478,169 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       }
     }
 
-    return Material(
-      elevation: 8,
-      color: scheme.surface,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    var meters = 0.0;
+    for (var i = start + 1; i <= end && i < route.length; i++) {
+      meters += _distance.as(LengthUnit.Meter, route[i - 1], route[i]);
+    }
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+          16, 16, 16, 16 + MediaQuery.of(context).padding.bottom),
+      decoration: BoxDecoration(
+        color: c.paper,
+        border: Border(
+          top: BorderSide(color: c.ink, width: strokeBold),
+          left: BorderSide(color: c.ink, width: strokeBold),
+          right: BorderSide(color: c.ink, width: strokeBold),
+        ),
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(radiusMd)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
             children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: 'Close',
-                  onPressed: _closePanel,
-                ),
-              ),
-              SizedBox(
-                height: 40,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: SizedBox(
-                          height: 8,
-                          child: Row(children: [
-                            for (final r in runs)
-                              Expanded(
-                                flex: r.$2,
-                                child: ColoredBox(
-                                  color: r.$1 ? _matchedColor : _unmappedColor,
-                                  child: const SizedBox.expand(),
-                                ),
-                              ),
-                          ]),
-                        ),
-                      ),
-                    ),
-                    SliderTheme(
-                      data: SliderTheme.of(context).copyWith(
-                        trackHeight: 8,
-                        activeTrackColor: _trailColor.withValues(alpha: 0.35),
-                        inactiveTrackColor: Colors.transparent,
-                        overlayShape: SliderComponentShape.noOverlay,
-                        rangeThumbShape: const _TrailThumbShape(),
-                        rangeTrackShape:
-                            const RectangularRangeSliderTrackShape(),
-                      ),
-                      child: RangeSlider(
-                        min: 0,
-                        max: (statuses.length - 1).toDouble(),
-                        values: sel,
-                        onChanged: (v) {
-                          var start = v.start.roundToDouble();
-                          var end = v.end.roundToDouble();
-                          if (end - start < _minTrailPoints) {
-                            // Keep the handle that wasn't dragged in place.
-                            if (start != sel.start.roundToDouble()) {
-                              start = end - _minTrailPoints;
-                            } else {
-                              end = start + _minTrailPoints;
-                            }
-                          }
-                          setState(() {
-                            _selection = RangeValues(
-                              start.clamp(0, statuses.length - 1.0),
-                              end.clamp(0, statuses.length - 1.0),
-                            );
-                            _submitError = null;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_submitError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(_submitError!,
-                      style: TextStyle(color: scheme.error, fontSize: 13)),
-                ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _submit,
-                  child: const Text('Submit'),
-                ),
+              Expanded(
+                  child: Text('Mark an untracked trail',
+                      style: TrailText.titleMd(c))),
+              const SizedBox(width: 16),
+              SquareGlyphButton(
+                glyph: '×',
+                semanticLabel: 'Close',
+                onPressed: _closePanel,
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 32,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Container(
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: c.paperShade,
+                      border: Border.all(color: c.ink, width: strokeLine),
+                      borderRadius: BorderRadius.circular(radiusSm),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(1),
+                      child: Row(children: [
+                        for (final r in runs)
+                          Expanded(
+                            flex: r.$2,
+                            child: ColoredBox(
+                              color: r.$1 ? c.route : c.unmapped,
+                              child: const SizedBox.expand(),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+                ),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 11,
+                    activeTrackColor: c.candidate,
+                    inactiveTrackColor: Colors.transparent,
+                    overlayShape: SliderComponentShape.noOverlay,
+                    rangeThumbShape: _TrailThumbShape(c),
+                    rangeTrackShape: const RectangularRangeSliderTrackShape(),
+                  ),
+                  child: RangeSlider(
+                    min: 0,
+                    max: (statuses.length - 1).toDouble(),
+                    values: sel,
+                    onChanged: (v) {
+                      var s = v.start.roundToDouble();
+                      var e = v.end.roundToDouble();
+                      if (e - s < _minTrailPoints) {
+                        // Keep the handle that wasn't dragged in place.
+                        if (s != sel.start.roundToDouble()) {
+                          s = e - _minTrailPoints;
+                        } else {
+                          e = s + _minTrailPoints;
+                        }
+                      }
+                      setState(() {
+                        _selection = RangeValues(
+                          s.clamp(0, statuses.length - 1.0),
+                          e.clamp(0, statuses.length - 1.0),
+                        );
+                        _submitError = null;
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          DefaultTextStyle.merge(
+            style: TrailText.data(c),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Point ${start + 1}'),
+                Text('${end - start + 1} points · ${meters.round()} m'),
+                Text('Point ${end + 1}'),
+              ],
+            ),
+          ),
+          if (_submitError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_submitError!, style: TrailText.error(c)),
+            ),
+          const SizedBox(height: 16),
+          PlateButton(primary: true, label: 'Submit', onPressed: _submit),
+        ],
       ),
     );
   }
 }
 
-class _TrailThumbShape extends RangeSliderThumbShape {
-  const _TrailThumbShape();
+/// A short line sample for the legend: solid or dashed, round-capped.
+class _SwatchPainter extends CustomPainter {
+  final Color color;
+  final bool dashed;
+  _SwatchPainter({required this.color, required this.dashed});
 
-  static const _radius = 10.0;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeRoute
+      ..strokeCap = dashed ? StrokeCap.butt : StrokeCap.round;
+    final y = size.height / 2;
+    if (!dashed) {
+      canvas.drawLine(Offset(2, y), Offset(size.width - 2, y), paint);
+      return;
+    }
+    var x = 2.0;
+    while (x < size.width - 2) {
+      canvas.drawLine(Offset(x, y),
+          Offset((x + dashUnmapped[0]).clamp(0, size.width - 2), y), paint);
+      x += dashUnmapped[0] + dashUnmapped[1];
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SwatchPainter old) =>
+      old.color != color || old.dashed != dashed;
+}
+
+/// Slider handle: a paper disc with an ink outline and a hard offset shadow.
+class _TrailThumbShape extends RangeSliderThumbShape {
+  final TrailColors colors;
+  const _TrailThumbShape(this.colors);
+
+  static const _radius = 14.0;
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
@@ -469,31 +661,17 @@ class _TrailThumbShape extends RangeSliderThumbShape {
     bool? isPressed,
   }) {
     final canvas = context.canvas;
-    canvas.drawCircle(center, _radius, Paint()..color = Colors.white);
+    final radius = _radius - strokeBold / 2;
+    canvas.drawCircle(center + const Offset(2, 2), radius,
+        Paint()..color = colors.ink);
+    canvas.drawCircle(center, radius, Paint()..color = colors.paper);
     canvas.drawCircle(
       center,
-      _radius,
+      radius,
       Paint()
-        ..color = _trailColor
+        ..color = colors.ink
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
-    );
-  }
-}
-
-class _Stat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _Stat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(value, style: Theme.of(context).textTheme.titleLarge),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
+        ..strokeWidth = strokeBold,
     );
   }
 }

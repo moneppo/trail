@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/supabase_service.dart';
+import '../theme/trail_theme.dart';
+import '../widgets/trail_widgets.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -37,57 +39,82 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Trail')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _isSignUp ? 'Create an account' : 'Sign in',
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
-              ),
-              const SizedBox(height: 20),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Center(child: Compass()),
+                const SizedBox(height: 32),
+                Cartouche(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        _isSignUp ? 'Join Trail' : 'Trail',
+                        style: TrailText.titleXl(c),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Walks, drawn in ink on paper',
+                        style: TrailText.caption(c),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      const LabelText('Email'),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: TrailText.body(c),
+                        decoration:
+                            const InputDecoration(hintText: 'you@example.com'),
+                      ),
+                      const SizedBox(height: 24),
+                      const LabelText('Password'),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        style: TrailText.body(c),
+                        decoration: const InputDecoration(
+                            hintText: 'At least 8 characters'),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(_error!, style: TrailText.error(c)),
+                        ),
+                      PlateButton(
+                        primary: true,
+                        label: _loading
+                            ? 'Please wait'
+                            : (_isSignUp ? 'Sign up' : 'Sign in'),
+                        onPressed: _loading ? null : _submit,
+                      ),
+                      const SizedBox(height: 12),
+                      Center(
+                        child: TrailLink(
+                          text: _isSignUp
+                              ? 'I already have an account'
+                              : 'Create an account',
+                          onPressed: _loading
+                              ? null
+                              : () => setState(() => _isSignUp = !_isSignUp),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              FilledButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_isSignUp ? 'Sign up' : 'Sign in'),
-              ),
-              TextButton(
-                onPressed: _loading
-                    ? null
-                    : () => setState(() => _isSignUp = !_isSignUp),
-                child: Text(_isSignUp
-                    ? 'Already have an account? Sign in'
-                    : 'No account? Sign up'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../services/supabase_service.dart';
 import '../services/walk_tracker.dart';
+import '../theme/trail_theme.dart';
+import '../widgets/trail_widgets.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -51,57 +53,97 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Trail'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _service.signOut(),
-          ),
-        ],
-      ),
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ValueListenableBuilder<Duration>(
-              valueListenable: _tracker.duration,
-              builder: (_, duration, _) => Text(
-                _formatDuration(duration),
-                style: Theme.of(context).textTheme.displayMedium,
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: c.ink, width: strokeBold)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(child: Text('Trail', style: TrailText.titleLg(c))),
+                  TrailLink(
+                    text: 'Walks',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  TrailLink(
+                    text: 'Sign out',
+                    onPressed: () => _service.signOut(),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
-            ValueListenableBuilder<double>(
-              valueListenable: _tracker.distance,
-              builder: (_, meters, _) => Text(
-                '${(meters / 1000).toStringAsFixed(2)} km',
-                style: Theme.of(context).textTheme.titleLarge,
+            Container(
+              height: 4,
+              decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: c.ink, width: strokeHair)),
               ),
             ),
-            const SizedBox(height: 32),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: Text(_error!, style: const TextStyle(color: Colors.red)),
-              ),
-            if (_uploading) const CircularProgressIndicator(),
-            if (!_uploading)
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _tracker.isTracking ? Colors.red : null,
-                  minimumSize: const Size(160, 56),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(child: LabelText('Elapsed')),
+                    const SizedBox(height: 4),
+                    ValueListenableBuilder<Duration>(
+                      valueListenable: _tracker.duration,
+                      builder: (_, duration, _) => Text(
+                        _formatDuration(duration),
+                        textAlign: TextAlign.center,
+                        style: TrailText.data(c).copyWith(
+                          fontSize: 64,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 2.56,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Center(child: LabelText('Distance')),
+                    const SizedBox(height: 4),
+                    ValueListenableBuilder<double>(
+                      valueListenable: _tracker.distance,
+                      builder: (_, meters, _) => Text(
+                        '${(meters / 1000).toStringAsFixed(2)} km',
+                        textAlign: TextAlign.center,
+                        style: TrailText.data(c).copyWith(
+                            fontSize: 28, height: 1.2, letterSpacing: 1.12),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(_error!,
+                            style: TrailText.error(c),
+                            textAlign: TextAlign.center),
+                      ),
+                    if (_uploading)
+                      Center(child: Text('Saving walk…', style: TrailText.caption(c)))
+                    else
+                      PlateButton(
+                        primary: true,
+                        label: _tracker.isTracking ? 'Stop walk' : 'Start walk',
+                        onPressed:
+                            _tracker.isTracking ? _onStopPressed : _onStartPressed,
+                      ),
+                  ],
                 ),
-                onPressed: _tracker.isTracking ? _onStopPressed : _onStartPressed,
-                child: Text(_tracker.isTracking ? 'Stop Walk' : 'Start Walk'),
               ),
+            ),
           ],
         ),
       ),
