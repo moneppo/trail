@@ -38,7 +38,7 @@
   --stroke-bold: 2.5px;
 
   /* next/font sets --font-display, --font-body and --font-data on <html>. */
-  --ff-display: var(--font-display), "IM Fell English SC", Georgia, serif;
+  --ff-display: var(--font-display), "Cormorant SC", Georgia, serif;
   --ff-body: var(--font-body), "IM Fell English", Georgia, serif;
   --ff-data: var(--font-data), "Barlow Condensed", "Arial Narrow", sans-serif;
 }
@@ -80,9 +80,9 @@ body {
 }
 
 /* Type styles. */
-.tc-title-xl { font: 400 40px/44px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
-.tc-title-lg { font: 400 28px/32px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
-.tc-title-md { font: 400 20px/26px var(--ff-display); letter-spacing: 0.03em; margin: 0; }
+.tc-title-xl { font: 600 44px/46px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
+.tc-title-lg { font: 600 30px/34px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
+.tc-title-md { font: 600 22px/28px var(--ff-display); letter-spacing: 0.03em; margin: 0; }
 .tc-label { font: 600 13px/16px var(--ff-data); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-soft); }
 .tc-data { font: 500 16px/20px var(--ff-data); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
 .tc-caption { font: italic 400 14px/20px var(--ff-body); color: var(--ink-soft); }

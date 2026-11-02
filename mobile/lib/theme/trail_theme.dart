@@ -73,16 +73,28 @@ const dashUnmapped = [10.0, 7.0];
 const radiusSm = 2.0;
 const radiusMd = 6.0;
 
-/// Type styles. Titles in IM Fell English SC, text in IM Fell English, labels,
+/// Type styles. Titles in Cormorant SC, text in IM Fell English, labels,
 /// numbers and buttons in Barlow Condensed. Letter spacing is the token's em
 /// value times the font size.
 class TrailText {
-  static TextStyle titleXl(TrailColors c) => GoogleFonts.imFellEnglishSc(
-      fontSize: 40, height: 44 / 40, letterSpacing: 0.8, color: c.ink);
-  static TextStyle titleLg(TrailColors c) => GoogleFonts.imFellEnglishSc(
-      fontSize: 28, height: 32 / 28, letterSpacing: 0.56, color: c.ink);
-  static TextStyle titleMd(TrailColors c) => GoogleFonts.imFellEnglishSc(
-      fontSize: 20, height: 26 / 20, letterSpacing: 0.6, color: c.ink);
+  static TextStyle titleXl(TrailColors c) => GoogleFonts.cormorantSc(
+      fontSize: 44,
+      height: 46 / 44,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.88,
+      color: c.ink);
+  static TextStyle titleLg(TrailColors c) => GoogleFonts.cormorantSc(
+      fontSize: 30,
+      height: 34 / 30,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.6,
+      color: c.ink);
+  static TextStyle titleMd(TrailColors c) => GoogleFonts.cormorantSc(
+      fontSize: 22,
+      height: 28 / 22,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.66,
+      color: c.ink);
 
   static TextStyle body(TrailColors c) =>
       GoogleFonts.imFellEnglish(fontSize: 17, height: 24 / 17, color: c.ink);

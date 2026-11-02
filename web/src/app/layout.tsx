@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { Barlow_Condensed, IM_Fell_English, IM_Fell_English_SC } from "next/font/google";
+import { Barlow_Condensed, IM_Fell_English, Cormorant_SC } from "next/font/google";
 import "./globals.css";
 
-const display = IM_Fell_English_SC({
+const display = Cormorant_SC({
   variable: "--font-display",
-  weight: "400",
+  weight: "600",
   subsets: ["latin"],
 });
 
