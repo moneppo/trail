@@ -92,7 +92,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           padding: const EdgeInsets.only(bottom: 16),
                           child: Text(_error!, style: TrailText.error(c)),
                         ),
-                      PlateButton(
+                      TrailButton(
                         primary: true,
                         label: _loading
                             ? 'Please wait'

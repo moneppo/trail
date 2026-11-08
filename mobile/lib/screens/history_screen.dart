@@ -51,7 +51,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                   decoration: BoxDecoration(
                     border: Border(
-                        bottom: BorderSide(color: c.ink, width: strokeBold)),
+                        bottom: BorderSide(color: c.inkSoft, width: strokeLine)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

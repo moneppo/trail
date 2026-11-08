@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../services/supabase_service.dart';
 import '../services/walk_tracker.dart';
+import '../theme/theme_controller.dart';
 import '../theme/trail_theme.dart';
+import '../widgets/options_sheet.dart';
 import '../widgets/trail_widgets.dart';
 import 'history_screen.dart';
 
@@ -63,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               decoration: BoxDecoration(
                 border: Border(
-                    bottom: BorderSide(color: c.ink, width: strokeBold)),
+                    bottom: BorderSide(color: c.inkSoft, width: strokeLine)),
               ),
               child: Row(
                 children: [
@@ -73,6 +75,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const HistoryScreen()),
                     ),
+                  ),
+                  const SizedBox(width: 20),
+                  TrailLink(
+                    text: 'Options',
+                    onPressed: () => showOptionsSheet(context, themeController),
                   ),
                   const SizedBox(width: 20),
                   TrailLink(
@@ -134,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (_uploading)
                       Center(child: Text('Saving walk…', style: TrailText.caption(c)))
                     else
-                      PlateButton(
+                      TrailButton(
                         primary: true,
                         label: _tracker.isTracking ? 'Stop walk' : 'Start walk',
                         onPressed:

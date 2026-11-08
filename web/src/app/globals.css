@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
-/* Trail Cartography tokens. Day chart by default; night chart follows the
-   system setting. Values come from the design system's tokens.json. */
+/* Trail Cartography tokens. The day chart is the default; the night chart
+   applies when the system is dark, unless the theme is set to light, and
+   whenever the theme is set to dark. Values come from the design system's
+   tokens.json. */
 :root {
   --paper: #f8f7f2;
   --paper-shade: #ddd3b5;
@@ -14,6 +16,10 @@
   --unmapped: #8a5a10;
   --candidate: #2f4a6b;
   --accepted: #2b6a52;
+  --wash-route: #efdcd6;
+  --wash-candidate: #dde4ee;
+  --wash-unmapped: #f0e5cc;
+  --wash-accepted: #d9e8e0;
   --water-wash: #d5dde0;
   --park-wash: #e1e6cf;
   --contour: #9b9179;
@@ -26,16 +32,13 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  --radius-sm: 2px;
-  --radius-md: 6px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
   --radius-round: 999px;
 
-  --plate: 3px 3px 0 0 #1c1915;
-  --plate-sm: 2px 2px 0 0 #1c1915;
-
-  --stroke-hair: 0.75px;
-  --stroke-line: 1.5px;
-  --stroke-bold: 2.5px;
+  --stroke-hair: 0.5px;
+  --stroke-line: 1px;
+  --stroke-bold: 1.25px;
 
   /* next/font sets --font-display, --font-body and --font-data on <html>. */
   --ff-display: var(--font-display), "Cormorant SC", Georgia, serif;
@@ -44,7 +47,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --paper: #17150f;
     --paper-shade: #322e23;
     --ink: #ece4d0;
@@ -56,13 +60,36 @@
     --unmapped: #dca847;
     --candidate: #94b5d9;
     --accepted: #86c9a9;
+    --wash-route: #33211e;
+    --wash-candidate: #1f2a38;
+    --wash-unmapped: #302817;
+    --wash-accepted: #1d2e27;
     --water-wash: #26313a;
     --park-wash: #2a3022;
     --contour: #6b634f;
-
-    --plate: 3px 3px 0 0 #ece4d0;
-    --plate-sm: 2px 2px 0 0 #ece4d0;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #17150f;
+  --paper-shade: #322e23;
+  --ink: #ece4d0;
+  --ink-soft: #bfb59d;
+  --ink-faint: #8f8671;
+  --rule: #4d4636;
+  --route: #e4745f;
+  --on-route: #17150f;
+  --unmapped: #dca847;
+  --candidate: #94b5d9;
+  --accepted: #86c9a9;
+  --wash-route: #33211e;
+  --wash-candidate: #1f2a38;
+  --wash-unmapped: #302817;
+  --wash-accepted: #1d2e27;
+  --water-wash: #26313a;
+  --park-wash: #2a3022;
+  --contour: #6b634f;
 }
 
 @theme inline {
@@ -79,6 +106,11 @@ body {
   line-height: 24px;
 }
 
+/* Rules under page headings. */
+.tc-rule-bold { border-bottom: var(--stroke-bold) solid var(--ink); }
+.tc-rule-hair { border-bottom: var(--stroke-hair) solid var(--ink); }
+.tc-rule-row { border-bottom: var(--stroke-hair) solid var(--rule); }
+
 /* Type styles. */
 .tc-title-xl { font: 600 44px/46px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
 .tc-title-lg { font: 600 30px/34px var(--ff-display); letter-spacing: 0.02em; margin: 0; }
@@ -89,51 +121,51 @@ body {
 .tc-hint { font: italic 400 15px/21px var(--ff-body); color: var(--unmapped); }
 .tc-error { font: italic 400 15px/21px var(--ff-body); color: var(--route); }
 
-/* Buttons: square plates with a hard offset shadow. */
+/* Buttons: thin outlines, no shadow. Primary carries a light wash of the route
+   hue; the strong route color is kept for the map. */
 .tc-btn {
   font: 600 16px/18px var(--ff-data);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   min-height: 44px;
   padding: var(--space-3) var(--space-6);
-  border: var(--stroke-bold) solid var(--ink);
+  border: var(--stroke-line) solid var(--ink-soft);
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
-  box-shadow: var(--plate);
   cursor: pointer;
 }
-.tc-btn--primary { background: var(--route); color: var(--on-route); }
+.tc-btn:hover:not(:disabled) { background: var(--paper-shade); }
+.tc-btn--primary { background: var(--wash-route); border-color: var(--route); color: var(--route); }
+.tc-btn--primary:hover:not(:disabled) { background: var(--wash-route); border-color: var(--ink); color: var(--ink); }
 .tc-btn--block { display: block; width: 100%; }
-.tc-btn:active { box-shadow: none; transform: translate(3px, 3px); }
 .tc-btn:disabled {
   background: var(--paper-shade);
   color: var(--ink-soft);
   border-color: var(--ink-faint);
-  box-shadow: none;
   cursor: default;
 }
 .tc-btn:focus-visible,
 .tc-close:focus-visible,
 .tc-link:focus-visible,
 .tc-switch:focus-visible,
-.tc-field input:focus-visible { outline: 3px solid var(--candidate); outline-offset: 3px; }
+.tc-choice:focus-visible,
+.tc-field input:focus-visible { outline: 2px solid var(--candidate); outline-offset: 2px; }
 
 .tc-close {
   width: 44px;
   height: 44px;
   display: inline-grid;
   place-items: center;
-  border: var(--stroke-bold) solid var(--ink);
+  border: var(--stroke-line) solid var(--ink-soft);
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
-  box-shadow: var(--plate-sm);
   font: 400 26px/1 var(--ff-body);
   cursor: pointer;
   text-decoration: none;
 }
-.tc-close:active { box-shadow: none; transform: translate(2px, 2px); }
+.tc-close:hover { background: var(--paper-shade); }
 
 .tc-link {
   color: var(--candidate);
@@ -147,13 +179,13 @@ body {
   cursor: pointer;
 }
 
-/* Cartouche and panels: same paper as the page, set apart by ink borders. */
+/* Cartouche and panels: the page's paper, set apart by thin ink lines. */
 .tc-cartouche {
   position: relative;
   background: var(--paper);
   color: var(--ink);
   border: var(--stroke-bold) solid var(--ink);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: var(--space-6) var(--space-4);
 }
 .tc-cartouche::after {
@@ -167,9 +199,8 @@ body {
 .tc-panel {
   background: var(--paper);
   color: var(--ink);
-  border: var(--stroke-bold) solid var(--ink);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--plate);
+  border: var(--stroke-line) solid var(--ink-soft);
+  border-radius: var(--radius-md);
 }
 
 .tc-field { display: grid; gap: var(--space-1); }
@@ -178,11 +209,39 @@ body {
   color: var(--ink);
   background: transparent;
   border: 0;
-  border-bottom: var(--stroke-line) solid var(--ink);
+  border-bottom: var(--stroke-line) solid var(--ink-soft);
   border-radius: 0;
   padding: var(--space-2) 0;
 }
 .tc-field input::placeholder { color: var(--ink-soft); }
+
+/* One option in a small choice list, for example the theme menu. */
+.tc-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--stroke-line) solid transparent;
+  border-radius: var(--radius-sm);
+  font: 400 17px/24px var(--ff-body);
+  text-align: left;
+  cursor: pointer;
+}
+.tc-choice:hover { background: var(--paper-shade); }
+.tc-choice[aria-checked="true"] { background: var(--wash-route); border-color: var(--route); color: var(--ink); }
+.tc-choice > i {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: var(--stroke-bold) solid var(--ink-soft);
+  border-radius: var(--radius-round);
+}
+.tc-choice[aria-checked="true"] > i { border-color: var(--route); background: var(--route); }
 
 .tc-switch {
   flex-shrink: 0;
@@ -193,25 +252,26 @@ body {
   display: flex;
   justify-content: flex-start;
   background: var(--paper-shade);
-  border: var(--stroke-bold) solid var(--ink);
+  border: var(--stroke-line) solid var(--ink-soft);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.tc-switch[aria-checked="true"] { justify-content: flex-end; background: var(--route); }
+.tc-switch[aria-checked="true"] { justify-content: flex-end; background: var(--wash-route); border-color: var(--route); }
 .tc-switch > span {
   display: block;
-  width: 18px;
+  width: 20px;
   height: 100%;
   background: var(--paper);
-  border: var(--stroke-line) solid var(--ink);
-  border-radius: 1px;
+  border: var(--stroke-line) solid var(--ink-soft);
+  border-radius: 2px;
 }
+.tc-switch[aria-checked="true"] > span { background: var(--route); border-color: var(--route); }
 
 .tc-strip {
   position: relative;
   height: 14px;
   box-sizing: border-box;
-  border: var(--stroke-line) solid var(--ink);
+  border: var(--stroke-line) solid var(--ink-soft);
   border-radius: var(--radius-sm);
   background: var(--paper-shade);
   overflow: hidden;
@@ -250,7 +310,6 @@ body {
   border-radius: var(--radius-round);
   border: var(--stroke-bold) solid var(--ink);
   background: var(--paper);
-  box-shadow: var(--plate-sm);
   cursor: grab;
 }
 .dual-range input[type="range"]::-moz-range-thumb {
@@ -261,11 +320,10 @@ body {
   border-radius: var(--radius-round);
   border: var(--stroke-bold) solid var(--ink);
   background: var(--paper);
-  box-shadow: var(--plate-sm);
   cursor: grab;
 }
-.dual-range input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 3px solid var(--candidate); outline-offset: 3px; }
-.dual-range input[type="range"]:focus-visible::-moz-range-thumb { outline: 3px solid var(--candidate); outline-offset: 3px; }
+.dual-range input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--candidate); outline-offset: 2px; }
+.dual-range input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--candidate); outline-offset: 2px; }
 
 /* MapLibre scale bar, drawn like the map's own furniture. */
 .maplibregl-ctrl-scale {
@@ -278,7 +336,3 @@ body {
 }
 .maplibregl-ctrl-attrib { background: var(--paper) !important; color: var(--ink-soft) !important; }
 .maplibregl-ctrl-attrib a { color: var(--ink-soft) !important; }
-
-@media (prefers-reduced-motion: reduce) {
-  .tc-btn:active, .tc-close:active { transform: none; }
-}

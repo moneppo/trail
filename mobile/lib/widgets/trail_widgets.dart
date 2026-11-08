@@ -1,20 +1,18 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/trail_theme.dart';
 
-List<BoxShadow> plateShadow(TrailColors c, {double offset = 3}) => [
-      BoxShadow(color: c.ink, offset: Offset(offset, offset), blurRadius: 0),
-    ];
-
-/// A square plate with a bold ink outline and a hard offset shadow. The
-/// shadow drops away and the plate shifts when pressed. Primary fills with the
-/// route color; the plain version sits on paper.
-class PlateButton extends StatefulWidget {
+/// A thin-outlined button with a small corner radius and no shadow. Primary
+/// carries a light wash of the route hue with route-colored text; the plain
+/// version sits on paper.
+class TrailButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool primary;
 
-  const PlateButton({
+  const TrailButton({
     super.key,
     required this.label,
     required this.onPressed,
@@ -22,27 +20,35 @@ class PlateButton extends StatefulWidget {
   });
 
   @override
-  State<PlateButton> createState() => _PlateButtonState();
+  State<TrailButton> createState() => _TrailButtonState();
 }
 
-class _PlateButtonState extends State<PlateButton> {
+class _TrailButtonState extends State<TrailButton> {
   bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final c = TrailColors.of(context);
     final enabled = widget.onPressed != null;
-    final fill = !enabled
-        ? c.paperShade
-        : widget.primary
-            ? c.route
-            : c.paper;
-    final fg = !enabled
-        ? c.inkSoft
-        : widget.primary
-            ? c.onRoute
-            : c.ink;
     final down = enabled && _pressed;
+
+    final Color fill;
+    final Color border;
+    final Color fg;
+    if (!enabled) {
+      fill = c.paperShade;
+      border = c.inkFaint;
+      fg = c.inkSoft;
+    } else if (widget.primary) {
+      fill = c.washRoute;
+      border = down ? c.ink : c.route;
+      fg = down ? c.ink : c.route;
+    } else {
+      fill = down ? c.paperShade : c.paper;
+      border = c.inkSoft;
+      fg = c.ink;
+    }
+
     return Semantics(
       button: true,
       enabled: enabled,
@@ -53,23 +59,18 @@ class _PlateButtonState extends State<PlateButton> {
         onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
         onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
         onTap: widget.onPressed,
-        child: Transform.translate(
-          offset: down ? const Offset(3, 3) : Offset.zero,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 52),
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              color: fill,
-              border: Border.all(
-                  color: enabled ? c.ink : c.inkFaint, width: strokeBold),
-              borderRadius: BorderRadius.circular(radiusSm),
-              boxShadow: enabled && !down ? plateShadow(c) : const [],
-            ),
-            child: Text(
-              widget.label.toUpperCase(),
-              style: TrailText.button(c).copyWith(color: fg),
-            ),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 52),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: BoxDecoration(
+            color: fill,
+            border: Border.all(color: border, width: strokeLine),
+            borderRadius: BorderRadius.circular(radiusSm),
+          ),
+          child: Text(
+            widget.label.toUpperCase(),
+            style: TrailText.button(c).copyWith(color: fg),
           ),
         ),
       ),
@@ -105,9 +106,8 @@ class SquareGlyphButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: c.paper,
-            border: Border.all(color: c.ink, width: strokeBold),
+            border: Border.all(color: c.inkSoft, width: strokeLine),
             borderRadius: BorderRadius.circular(radiusSm),
-            boxShadow: plateShadow(c, offset: 2),
           ),
           child: Text(glyph,
               style: TrailText.body(c).copyWith(fontSize: 26, height: 1)),
@@ -117,7 +117,7 @@ class SquareGlyphButton extends StatelessWidget {
   }
 }
 
-/// The title block: a bold outer line and a hairline inner neatline on the
+/// The title block: a thin outer line and a hairline inner neatline on the
 /// same paper as the page.
 class Cartouche extends StatelessWidget {
   final Widget child;
@@ -137,7 +137,7 @@ class Cartouche extends StatelessWidget {
       decoration: BoxDecoration(
         color: c.paper,
         border: Border.all(color: c.ink, width: strokeBold),
-        borderRadius: BorderRadius.circular(radiusSm),
+        borderRadius: BorderRadius.circular(radiusMd),
       ),
       child: Container(
         padding: padding,
@@ -151,7 +151,7 @@ class Cartouche extends StatelessWidget {
   }
 }
 
-/// A square on/off switch: ink outline, route-colored when on.
+/// A square on/off switch: a wash of the route hue when on.
 class TrailSwitch extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
@@ -179,16 +179,18 @@ class TrailSwitch extends StatelessWidget {
           padding: const EdgeInsets.all(2),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: value ? c.route : c.paperShade,
-            border: Border.all(color: c.ink, width: strokeBold),
+            color: value ? c.washRoute : c.paperShade,
+            border:
+                Border.all(color: value ? c.route : c.inkSoft, width: strokeLine),
             borderRadius: BorderRadius.circular(radiusSm),
           ),
           child: Container(
-            width: 18,
+            width: 20,
             decoration: BoxDecoration(
-              color: c.paper,
-              border: Border.all(color: c.ink, width: strokeLine),
-              borderRadius: BorderRadius.circular(1),
+              color: value ? c.route : c.paper,
+              border: Border.all(
+                  color: value ? c.route : c.inkSoft, width: strokeLine),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
         ),
@@ -241,20 +243,34 @@ class LabelText extends StatelessWidget {
       );
 }
 
-/// North arrow drawn in ink: two rings and four points, north filled.
+/// North arrow drawn in ink: two rings and four points, north in the route
+/// color. [bearing] is the map's rotation in degrees; the arrow turns the
+/// opposite way so it keeps pointing at north. Give [onTap] to make it a
+/// button that straightens the map.
 class Compass extends StatelessWidget {
   final double size;
-  const Compass({super.key, this.size = 104});
+  final double bearing;
+  final VoidCallback? onTap;
+
+  const Compass({super.key, this.size = 104, this.bearing = 0, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final c = TrailColors.of(context);
-    return Semantics(
-      label: 'North arrow',
+    Widget art = Transform.rotate(
+      angle: -bearing * math.pi / 180,
       child: CustomPaint(
         size: Size.square(size),
-        painter: _CompassPainter(ink: c.ink, paper: c.paper),
+        painter: _CompassPainter(ink: c.ink, paper: c.paper, north: c.route),
       ),
+    );
+    if (onTap != null) {
+      art = GestureDetector(onTap: onTap, child: art);
+    }
+    return Semantics(
+      label: onTap != null ? 'Point the map north' : 'North arrow',
+      button: onTap != null,
+      child: art,
     );
   }
 }
@@ -262,7 +278,8 @@ class Compass extends StatelessWidget {
 class _CompassPainter extends CustomPainter {
   final Color ink;
   final Color paper;
-  _CompassPainter({required this.ink, required this.paper});
+  final Color north;
+  _CompassPainter({required this.ink, required this.paper, required this.north});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -274,7 +291,7 @@ class _CompassPainter extends CustomPainter {
     final line = Paint()
       ..color = ink
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeLine
+      ..strokeWidth = 1.5
       ..strokeJoin = StrokeJoin.round;
     canvas.drawCircle(
         Offset.zero,
@@ -282,7 +299,7 @@ class _CompassPainter extends CustomPainter {
         Paint()
           ..color = ink
           ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeHair);
+          ..strokeWidth = 0.75);
     canvas.drawCircle(Offset.zero, 29, Paint()..color = paper);
     canvas.drawCircle(Offset.zero, 29, line);
 
@@ -296,7 +313,7 @@ class _CompassPainter extends CustomPainter {
 
     canvas.drawPath(
         kite(const Offset(0, -46), const Offset(6, -6), const Offset(-6, -6)),
-        Paint()..color = ink);
+        Paint()..color = north);
     canvas.drawPath(
         kite(const Offset(0, 46), const Offset(6, 6), const Offset(-6, 6)),
         line);
@@ -310,7 +327,7 @@ class _CompassPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CompassPainter old) =>
-      old.ink != ink || old.paper != paper;
+      old.ink != ink || old.paper != paper || old.north != north;
 }
 
 /// Grayscale-and-tint filter that turns the colored OpenStreetMap tiles into

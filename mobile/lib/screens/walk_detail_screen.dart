@@ -26,14 +26,17 @@ class WalkDetailScreen extends StatefulWidget {
 class _WalkDetailScreenState extends State<WalkDetailScreen> {
   final _service = SupabaseService();
   final _gapHits = ValueNotifier<LayerHitResult<int>?>(null);
+  final _mapController = MapController();
+  // The map's rotation in degrees, for the compass.
+  final _bearing = ValueNotifier<double>(0);
 
   List<LatLng>? _raw;
   MatchResult? _snapped;
   List<(int, int)> _trails = [];
   String? _loadError;
 
-  bool _snap = true;
-  String? _snapStatus;
+  // Set only when matching to streets failed and the recorded route is shown.
+  String? _snapNote;
 
   // The stretch being adjusted in the panel, as point indices.
   RangeValues? _selection;
@@ -48,6 +51,8 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   @override
   void dispose() {
     _gapHits.dispose();
+    _bearing.dispose();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -76,7 +81,6 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       final stored = await _service.fetchSnappedRoute(id);
       if (stored != null && stored.route.length == raw.length) {
         debugPrint('[WalkDetail] $id: snapped route loaded from database');
-        _setStatus('Snapped route loaded from database');
         return stored;
       }
     } catch (e) {
@@ -84,25 +88,21 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
     }
 
     final result = await RouteMatcher().match(raw);
-    var status = result.describe();
+    debugPrint('[WalkDetail] $id: ${result.describe()}');
     // Only store a match that ran to completion; a failed one is retried the
     // next time the walk is opened.
     if (result.complete) {
       try {
         await _service.saveSnappedRoute(id, result);
         debugPrint('[WalkDetail] $id: saved ${raw.length} snapped points');
-        status += ' (saved)';
       } catch (e) {
         debugPrint('[WalkDetail] $id: saving snapped route failed: $e');
-        status += ' (could not save: $e)';
       }
+    } else if (mounted) {
+      setState(() => _snapNote =
+          'Couldn\'t match this walk to streets, so the recorded route is shown.');
     }
-    _setStatus(status);
     return result;
-  }
-
-  void _setStatus(String status) {
-    if (mounted) setState(() => _snapStatus = status);
   }
 
   String _formatDuration(int seconds) {
@@ -120,7 +120,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
   /// dashed sections.
   List<(int, int)> get _gaps {
     final snapped = _snapped;
-    if (!_snap || snapped == null) return const [];
+    if (snapped == null) return const [];
     return findUnmappedRuns(snapped.statuses)
         .where((g) => !_overlapsTrail(g.$1, g.$2))
         .toList();
@@ -207,7 +207,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               decoration: BoxDecoration(
                 color: c.paper,
                 border: Border(
-                    bottom: BorderSide(color: c.ink, width: strokeBold)),
+                    bottom: BorderSide(color: c.inkSoft, width: strokeLine)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -238,26 +238,11 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Expanded(child: LabelText('Snap to streets and trails')),
-                      const SizedBox(width: 12),
-                      TrailSwitch(
-                        value: _snap,
-                        semanticLabel: 'Snap to streets and trails',
-                        onChanged: (v) => setState(() {
-                          _snap = v;
-                          _selection = null;
-                        }),
-                      ),
-                    ],
-                  ),
-                  if (_snap)
+                  if (_snapNote != null)
                     Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.only(top: 8),
                       child: Text(
-                        _snapStatus ?? 'Matching…',
+                        _snapNote!,
                         style: TrailText.caption(c),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -270,7 +255,18 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               child: Stack(
                 children: [
                   Positioned.fill(child: _buildMap(context, c)),
-                  const Positioned(top: 12, right: 12, child: Compass(size: 56)),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _bearing,
+                      builder: (_, bearing, _) => Compass(
+                        size: 56,
+                        bearing: bearing,
+                        onTap: () => _mapController.rotate(0),
+                      ),
+                    ),
+                  ),
                   Positioned(
                     left: 0,
                     right: 0,
@@ -305,7 +301,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       );
     }
 
-    final snapped = _snap ? _snapped : null;
+    final snapped = _snapped;
     final route = snapped?.route ?? raw;
     final gaps = _gaps;
     final sel = _selection;
@@ -318,7 +314,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
             decoration: BoxDecoration(
               color: c.paper,
               shape: BoxShape.circle,
-              border: Border.all(color: c.ink, width: strokeBold),
+              border: Border.all(color: c.ink, width: strokeMarker),
             ),
             child: filled
                 ? Center(
@@ -334,8 +330,19 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
         );
 
     return FlutterMap(
+      mapController: _mapController,
       options: MapOptions(
         backgroundColor: c.paper,
+        // Two-finger rotation turns the map and the compass with it.
+        interactionOptions:
+            const InteractionOptions(flags: InteractiveFlag.all),
+        onMapEvent: (event) {
+          // Only notify on a real change: this also fires while the map is
+          // first laid out.
+          if (_bearing.value != event.camera.rotation) {
+            _bearing.value = event.camera.rotation;
+          }
+        },
         initialCameraFit: route.length > 1
             ? CameraFit.coordinates(
                 coordinates: route,
@@ -428,14 +435,14 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
 
   /// What the map's lines mean, plus the hint that dashed stretches are tappable.
   Widget _buildLegend(BuildContext context, TrailColors c) {
-    if (!_snap || _snapped == null) return const SizedBox.shrink();
+    if (_snapped == null) return const SizedBox.shrink();
     final gaps = _gaps;
     return Container(
       padding: EdgeInsets.fromLTRB(
           16, 14, 16, 14 + MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
         color: c.paper,
-        border: Border(top: BorderSide(color: c.ink, width: strokeBold)),
+        border: Border(top: BorderSide(color: c.inkSoft, width: strokeLine)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,9 +496,9 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
       decoration: BoxDecoration(
         color: c.paper,
         border: Border(
-          top: BorderSide(color: c.ink, width: strokeBold),
-          left: BorderSide(color: c.ink, width: strokeBold),
-          right: BorderSide(color: c.ink, width: strokeBold),
+          top: BorderSide(color: c.inkSoft, width: strokeLine),
+          left: BorderSide(color: c.inkSoft, width: strokeLine),
+          right: BorderSide(color: c.inkSoft, width: strokeLine),
         ),
         borderRadius:
             const BorderRadius.vertical(top: Radius.circular(radiusMd)),
@@ -525,7 +532,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
                     height: 14,
                     decoration: BoxDecoration(
                       color: c.paperShade,
-                      border: Border.all(color: c.ink, width: strokeLine),
+                      border: Border.all(color: c.inkSoft, width: strokeLine),
                       borderRadius: BorderRadius.circular(radiusSm),
                     ),
                     child: ClipRRect(
@@ -598,7 +605,7 @@ class _WalkDetailScreenState extends State<WalkDetailScreen> {
               child: Text(_submitError!, style: TrailText.error(c)),
             ),
           const SizedBox(height: 16),
-          PlateButton(primary: true, label: 'Submit', onPressed: _submit),
+          TrailButton(primary: true, label: 'Submit', onPressed: _submit),
         ],
       ),
     );
@@ -635,7 +642,7 @@ class _SwatchPainter extends CustomPainter {
       old.color != color || old.dashed != dashed;
 }
 
-/// Slider handle: a paper disc with an ink outline and a hard offset shadow.
+/// Slider handle: a paper disc with a thin ink outline.
 class _TrailThumbShape extends RangeSliderThumbShape {
   final TrailColors colors;
   const _TrailThumbShape(this.colors);
@@ -662,8 +669,6 @@ class _TrailThumbShape extends RangeSliderThumbShape {
   }) {
     final canvas = context.canvas;
     final radius = _radius - strokeBold / 2;
-    canvas.drawCircle(center + const Offset(2, 2), radius,
-        Paint()..color = colors.ink);
     canvas.drawCircle(center, radius, Paint()..color = colors.paper);
     canvas.drawCircle(
       center,

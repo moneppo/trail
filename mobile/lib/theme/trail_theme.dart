@@ -16,6 +16,13 @@ class TrailColors {
   final Color candidate;
   final Color accepted;
 
+  /// Light washes of the route, candidate, unmapped and accepted hues, for
+  /// fills like buttons and selected rows. The strong colors are kept for the map.
+  final Color washRoute;
+  final Color washCandidate;
+  final Color washUnmapped;
+  final Color washAccepted;
+
   const TrailColors({
     required this.paper,
     required this.paperShade,
@@ -28,6 +35,10 @@ class TrailColors {
     required this.unmapped,
     required this.candidate,
     required this.accepted,
+    required this.washRoute,
+    required this.washCandidate,
+    required this.washUnmapped,
+    required this.washAccepted,
   });
 
   static const day = TrailColors(
@@ -42,6 +53,10 @@ class TrailColors {
     unmapped: Color(0xFF8A5A10),
     candidate: Color(0xFF2F4A6B),
     accepted: Color(0xFF2B6A52),
+    washRoute: Color(0xFFEFDCD6),
+    washCandidate: Color(0xFFDDE4EE),
+    washUnmapped: Color(0xFFF0E5CC),
+    washAccepted: Color(0xFFD9E8E0),
   );
 
   static const night = TrailColors(
@@ -56,6 +71,10 @@ class TrailColors {
     unmapped: Color(0xFFDCA847),
     candidate: Color(0xFF94B5D9),
     accepted: Color(0xFF86C9A9),
+    washRoute: Color(0xFF33211E),
+    washCandidate: Color(0xFF1F2A38),
+    washUnmapped: Color(0xFF302817),
+    washAccepted: Color(0xFF1D2E27),
   );
 
   static TrailColors of(BuildContext context) =>
@@ -63,15 +82,18 @@ class TrailColors {
 }
 
 /// Line weights and dash pattern, in logical pixels.
-const strokeHair = 0.75;
-const strokeLine = 1.5;
-const strokeBold = 2.5;
+const strokeHair = 0.5;
+const strokeLine = 1.0;
+const strokeBold = 1.25;
+
+/// Outline of the round markers and handles drawn on the map.
+const strokeMarker = 2.0;
 const strokeRoute = 4.0;
 const strokeTrail = 6.0;
 const dashUnmapped = [10.0, 7.0];
 
-const radiusSm = 2.0;
-const radiusMd = 6.0;
+const radiusSm = 4.0;
+const radiusMd = 8.0;
 
 /// Type styles. Titles in Cormorant SC, text in IM Fell English, labels,
 /// numbers and buttons in Barlow Condensed. Letter spacing is the token's em

@@ -9,8 +9,8 @@ import rough from "roughjs";
 import { supabase } from "@/lib/supabaseClient";
 import { inkMapStyle } from "@/lib/inkMapStyle";
 import { Compass } from "@/components/Compass";
+import { useIsNight } from "@/lib/theme";
 import {
-  describeResult,
   distanceMeters,
   snapRoute,
   type LngLat,
@@ -74,19 +74,23 @@ function WalkDetailContent() {
   const [points, setPoints] = useState<WalkPoint[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [snap, setSnap] = useState(true);
+  const night = useIsNight();
+  const [bearing, setBearing] = useState(0);
   const [snapped, setSnapped] = useState<LngLat[] | null>(null);
   const [statuses, setStatuses] = useState<MatchStatus[] | null>(null);
-  const [snapStatus, setSnapStatus] = useState<string | null>(null);
+  // Set only when matching to streets failed and the recorded route is shown.
+  const [snapNote, setSnapNote] = useState<string | null>(null);
   const [trails, setTrails] = useState<Range[]>([]);
   // The stretch being adjusted in the panel, as point indices.
   const [selection, setSelection] = useState<Range | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const mapRef = useRef<maplibregl.Map | null>(null);
-  // What the canvas overlay draws. Kept in refs so that toggling snapping,
-  // receiving the snapped route or moving a handle only needs a repaint, not
-  // a rebuild of the whole map.
+  // The theme the map style was last built for, so a theme change restyles it.
+  const styleNightRef = useRef(night);
+  // What the canvas overlay draws. Kept in refs so that receiving the snapped
+  // route or moving a handle only needs a repaint, not a rebuild of the whole
+  // map.
   const routeRef = useRef<LngLat[]>([]);
   const gapsRef = useRef<Range[]>([]);
   const trailsRef = useRef<Range[]>([]);
@@ -99,11 +103,11 @@ function WalkDetailContent() {
   // Unmapped runs that haven't been submitted yet; these are the clickable
   // dashed sections.
   const gaps = useMemo(() => {
-    if (!snap || !statuses) return [];
+    if (!statuses) return [];
     return findUnmappedRuns(statuses).filter(
       ([s, e]) => !trails.some(([ts, te]) => s <= te && e >= ts),
     );
-  }, [snap, statuses, trails]);
+  }, [statuses, trails]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -140,7 +144,11 @@ function WalkDetailContent() {
       if (cancelled) return;
       setSnapped(result.route);
       setStatuses(result.statuses);
-      setSnapStatus(describeResult(result));
+      setSnapNote(
+        result.errors.length > 0
+          ? "Couldn't match this walk to streets, so the recorded route is shown."
+          : null,
+      );
       setTrails(submitted);
     });
     return () => {
@@ -152,17 +160,16 @@ function WalkDetailContent() {
   // first created.
   useEffect(() => {
     if (!points) return;
-    routeRef.current =
-      snap && snapped ? snapped : points.map((p) => [p.lng, p.lat] as LngLat);
+    routeRef.current = snapped ?? points.map((p) => [p.lng, p.lat] as LngLat);
     gapsRef.current = gaps;
-    trailsRef.current = snap ? trails : [];
-    selectionRef.current = snap ? selection : null;
+    trailsRef.current = trails;
+    selectionRef.current = selection;
     openGapRef.current = ([start, end]) => {
       setSelection([start, end]);
       setSubmitError(null);
     };
     mapRef.current?.triggerRepaint();
-  }, [points, snapped, snap, gaps, trails, selection]);
+  }, [points, snapped, gaps, trails, selection]);
 
   useEffect(() => {
     if (!mapContainer.current || !sketchCanvas.current || !points || points.length === 0) return;
@@ -177,7 +184,7 @@ function WalkDetailContent() {
     const coordinates = points.map((p) => [p.lng, p.lat] as [number, number]);
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: inkMapStyle(window.matchMedia("(prefers-color-scheme: dark)").matches),
+      style: inkMapStyle(styleNightRef.current),
       center: coordinates[0],
       zoom: 14,
     });
@@ -341,18 +348,29 @@ function WalkDetailContent() {
       );
       map.fitBounds(bounds, { padding: 60, duration: 0 });
     });
+    // Keep the compass turned with the map.
+    const onRotate = () => setBearing(map.getBearing());
     map.on("render", drawRoute);
     map.on("click", onClick);
     map.on("mousemove", onMove);
+    map.on("rotate", onRotate);
 
     return () => {
       map.off("render", drawRoute);
       map.off("click", onClick);
       map.off("mousemove", onMove);
+      map.off("rotate", onRotate);
       map.remove();
       mapRef.current = null;
     };
   }, [points]);
+
+  // Restyle the basemap when the theme changes.
+  useEffect(() => {
+    if (styleNightRef.current === night) return;
+    styleNightRef.current = night;
+    mapRef.current?.setStyle(inkMapStyle(night));
+  }, [night]);
 
   // Colour strip of the whole walk for the panel: mapped vs unmapped stretches.
   const runs = useMemo(() => {
@@ -371,14 +389,14 @@ function WalkDetailContent() {
 
   // Length in metres of the stretch being adjusted, along the drawn route.
   const selectionMeters = useMemo(() => {
-    const route = snap && snapped ? snapped : (points ?? []).map((p) => [p.lng, p.lat] as LngLat);
+    const route = snapped ?? (points ?? []).map((p) => [p.lng, p.lat] as LngLat);
     if (!selection) return 0;
     let total = 0;
     for (let i = selection[0] + 1; i <= selection[1] && i < route.length; i++) {
       total += distanceMeters(route[i - 1], route[i]);
     }
     return total;
-  }, [selection, snap, snapped, points]);
+  }, [selection, snapped, points]);
 
   function closePanel() {
     setSelection(null);
@@ -406,7 +424,12 @@ function WalkDetailContent() {
       <div ref={mapContainer} className="absolute inset-0 h-full w-full" />
       <canvas ref={sketchCanvas} className="pointer-events-none absolute inset-0 h-full w-full" />
 
-      <Compass size={72} className="pointer-events-none absolute top-4 right-4 z-10" />
+      <Compass
+        size={72}
+        bearing={bearing}
+        onReset={() => mapRef.current?.easeTo({ bearing: 0, duration: 300 })}
+        className="absolute top-4 right-4 z-10"
+      />
 
       <div className="tc-panel absolute top-4 left-4 z-10 flex w-[min(22rem,calc(100%-7rem))] flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
@@ -426,27 +449,9 @@ function WalkDetailContent() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <span id="snap-label" className="tc-label">
-            Snap to streets and trails
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={snap}
-            aria-labelledby="snap-label"
-            className="tc-switch"
-            onClick={() => {
-              setSnap(!snap);
-              closePanel();
-            }}
-          >
-            <span />
-          </button>
-        </div>
-        {snap && <p className="tc-caption">{snapStatus ?? "Matching…"}</p>}
+        {snapNote && <p className="tc-caption">{snapNote}</p>}
 
-        {snap && statuses && (
+        {statuses && (
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             <div className="flex items-center gap-2">
               <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true">
@@ -468,12 +473,12 @@ function WalkDetailContent() {
             </div>
           </div>
         )}
-        {snap && gaps.length > 0 && !selection && (
+        {gaps.length > 0 && !selection && (
           <p className="tc-hint">Click a dashed stretch to mark it as a trail.</p>
         )}
       </div>
 
-      {snap && selection && (
+      {selection && (
         <div className="tc-panel absolute bottom-10 left-1/2 z-10 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-4 p-4">
           <div className="flex items-center justify-between gap-4">
             <h2 className="tc-title-md">Mark an untracked trail</h2>

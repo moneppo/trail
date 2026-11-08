@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { OptionsMenu } from "@/components/OptionsMenu";
 import { supabase } from "@/lib/supabaseClient";
 import type { Walk } from "@/lib/types";
 
@@ -44,18 +45,21 @@ export default function WalksPage() {
 
   return (
     <main className="flex-1 max-w-2xl mx-auto w-full px-4 pb-12">
-      <header className="flex items-end justify-between gap-4 border-b-[2.5px] border-ink pt-12 pb-4">
+      <header className="tc-rule-bold flex items-end justify-between gap-4 pt-12 pb-4">
         <div>
           <p className="tc-label">
             {walks ? `${walks.length} ${walks.length === 1 ? "walk" : "walks"} · ${totalKm.toFixed(1)} km` : " "}
           </p>
           <h1 className="tc-title-xl">Your walks</h1>
         </div>
-        <button onClick={handleSignOut} className="tc-link">
-          Sign out
-        </button>
+        <div className="flex items-center gap-5">
+          <OptionsMenu />
+          <button onClick={handleSignOut} className="tc-link">
+            Sign out
+          </button>
+        </div>
       </header>
-      <div className="h-1 border-b-[0.75px] border-ink" />
+      <div className="tc-rule-hair h-1" />
 
       {error && <p className="tc-error mt-4">{error}</p>}
       {walks === null && !error && <p className="tc-caption mt-4">Loading walks…</p>}
@@ -63,7 +67,7 @@ export default function WalksPage() {
 
       <ul>
         {walks?.map((walk) => (
-          <li key={walk.id} className="border-b-[0.75px] border-[var(--rule)]">
+          <li key={walk.id} className="tc-rule-row">
             <Link
               href={`/walks/${walk.id}`}
               className="flex items-center justify-between gap-4 py-4 hover:underline decoration-dashed underline-offset-4"

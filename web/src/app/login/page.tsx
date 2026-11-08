@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Compass } from "@/components/Compass";
+import { OptionsMenu } from "@/components/OptionsMenu";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,7 +32,10 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-8 p-6">
+    <main className="relative flex flex-1 flex-col items-center justify-center gap-8 p-6">
+      <div className="absolute right-4 top-4">
+        <OptionsMenu />
+      </div>
       <Compass />
       <div className="tc-cartouche w-full max-w-sm">
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
