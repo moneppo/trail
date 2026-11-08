@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../models/walk.dart';
 
@@ -26,6 +27,7 @@ class TrackedWalk {
 /// never loses data.
 class WalkTracker {
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<Position>? _previewSub;
   Timer? _durationTimer;
   final List<Position> _positions = [];
   DateTime? _startedAt;
@@ -34,7 +36,49 @@ class WalkTracker {
   final ValueNotifier<double> distance = ValueNotifier(0);
   final ValueNotifier<Duration> duration = ValueNotifier(Duration.zero);
 
+  /// The latest known position, before and during a walk.
+  final ValueNotifier<LatLng?> current = ValueNotifier(null);
+
+  /// How many points the walk has recorded so far.
+  final ValueNotifier<int> pointCount = ValueNotifier(0);
+
   bool get isTracking => _positionSub != null;
+
+  /// The recorded route so far.
+  List<LatLng> get track =>
+      [for (final p in _positions) LatLng(p.latitude, p.longitude)];
+
+  /// Follows the device's position without recording, so the map can show
+  /// where the walker is before the walk starts.
+  Future<void> startPreview() async {
+    if (_previewSub != null || isTracking) return;
+    final last = await Geolocator.getLastKnownPosition();
+    if (last != null && current.value == null) {
+      current.value = LatLng(last.latitude, last.longitude);
+    }
+    _previewSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.best,
+        distanceFilter: 5,
+      ),
+    ).listen((p) => current.value = LatLng(p.latitude, p.longitude));
+  }
+
+  Future<void> _stopPreview() async {
+    await _previewSub?.cancel();
+    _previewSub = null;
+  }
+
+  /// Releases the location streams and notifiers. Call when the screen goes away.
+  void dispose() {
+    _previewSub?.cancel();
+    _positionSub?.cancel();
+    _durationTimer?.cancel();
+    distance.dispose();
+    duration.dispose();
+    current.dispose();
+    pointCount.dispose();
+  }
 
   /// iOS requires requesting "When In Use" before it will offer the
   /// "Always" upgrade prompt that Info.plist's
@@ -56,9 +100,11 @@ class WalkTracker {
         permission == LocationPermission.whileInUse;
   }
 
-  void start() {
+  Future<void> start() async {
+    await _stopPreview();
     _positions.clear();
     _distanceMeters = 0;
+    pointCount.value = 0;
     _startedAt = DateTime.now();
     distance.value = 0;
     duration.value = Duration.zero;
@@ -87,6 +133,7 @@ class WalkTracker {
   }
 
   void _onPosition(Position position) {
+    current.value = LatLng(position.latitude, position.longitude);
     if (_positions.isNotEmpty) {
       final last = _positions.last;
       _distanceMeters += Geolocator.distanceBetween(
@@ -98,6 +145,7 @@ class WalkTracker {
       distance.value = _distanceMeters;
     }
     _positions.add(position);
+    pointCount.value = _positions.length;
   }
 
   Future<TrackedWalk?> stop() async {
