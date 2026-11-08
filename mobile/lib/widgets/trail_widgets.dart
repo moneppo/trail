@@ -244,9 +244,9 @@ class LabelText extends StatelessWidget {
 }
 
 /// North arrow drawn in ink: two rings and four points, north in the route
-/// color. [bearing] is the map's rotation in degrees; the arrow turns the
-/// opposite way so it keeps pointing at north. Give [onTap] to make it a
-/// button that straightens the map.
+/// color. [bearing] is flutter_map's camera rotation in degrees, which turns
+/// the map clockwise, so the arrow turns clockwise by the same amount to keep
+/// pointing at north. Give [onTap] to make it a button that straightens the map.
 class Compass extends StatelessWidget {
   final double size;
   final double bearing;
@@ -258,7 +258,7 @@ class Compass extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = TrailColors.of(context);
     Widget art = Transform.rotate(
-      angle: -bearing * math.pi / 180,
+      angle: bearing * math.pi / 180,
       child: CustomPaint(
         size: Size.square(size),
         painter: _CompassPainter(ink: c.ink, paper: c.paper, north: c.route),
