@@ -129,15 +129,15 @@ body {
   text-transform: uppercase;
   min-height: 44px;
   padding: var(--space-3) var(--space-6);
-  border: var(--stroke-line) solid var(--ink-soft);
+  border: var(--stroke-line) solid var(--ink);
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
   cursor: pointer;
 }
 .tc-btn:hover:not(:disabled) { background: var(--paper-shade); }
-.tc-btn--primary { background: var(--wash-route); border-color: var(--route); color: var(--route); }
-.tc-btn--primary:hover:not(:disabled) { background: var(--wash-route); border-color: var(--ink); color: var(--ink); }
+.tc-btn--primary { background: var(--wash-route); border-color: var(--ink); color: var(--ink); }
+.tc-btn--primary:hover:not(:disabled) { background: var(--wash-route); }
 .tc-btn--block { display: block; width: 100%; }
 .tc-btn:disabled {
   background: var(--paper-shade);
@@ -148,8 +148,8 @@ body {
 .tc-btn:focus-visible,
 .tc-close:focus-visible,
 .tc-link:focus-visible,
-.tc-switch:focus-visible,
-.tc-choice:focus-visible,
+.tc-icon-btn:focus-visible,
+.tc-seg button:focus-visible,
 .tc-field input:focus-visible { outline: 2px solid var(--candidate); outline-offset: 2px; }
 
 .tc-close {
@@ -215,57 +215,46 @@ body {
 }
 .tc-field input::placeholder { color: var(--ink-soft); }
 
-/* One option in a small choice list, for example the theme menu. */
-.tc-choice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: 44px;
-  padding: var(--space-2) var(--space-3);
+/* A round icon button, for example back or the map key. */
+.tc-icon-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  border: var(--stroke-line) solid var(--ink-soft);
+  border-radius: var(--radius-round);
   background: var(--paper);
   color: var(--ink);
-  border: var(--stroke-line) solid transparent;
-  border-radius: var(--radius-sm);
-  font: 400 17px/24px var(--ff-body);
-  text-align: left;
   cursor: pointer;
+  text-decoration: none;
 }
-.tc-choice:hover { background: var(--paper-shade); }
-.tc-choice[aria-checked="true"] { background: var(--wash-route); border-color: var(--route); color: var(--ink); }
-.tc-choice > i {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  box-sizing: border-box;
-  border: var(--stroke-bold) solid var(--ink-soft);
-  border-radius: var(--radius-round);
-}
-.tc-choice[aria-checked="true"] > i { border-color: var(--route); background: var(--route); }
+.tc-icon-btn:hover { background: var(--paper-shade); }
 
-.tc-switch {
-  flex-shrink: 0;
-  width: 52px;
-  height: 28px;
-  box-sizing: border-box;
-  padding: 2px;
+/* A row of connected choices where exactly one is selected, as icons or short text. */
+.tc-seg {
   display: flex;
-  justify-content: flex-start;
-  background: var(--paper-shade);
   border: var(--stroke-line) solid var(--ink-soft);
   border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.tc-seg button {
+  flex: 1;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  color: var(--ink-soft);
+  border: 0;
+  border-left: var(--stroke-line) solid var(--ink-soft);
+  font: 600 15px/18px var(--ff-data);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
 }
-.tc-switch[aria-checked="true"] { justify-content: flex-end; background: var(--wash-route); border-color: var(--route); }
-.tc-switch > span {
-  display: block;
-  width: 20px;
-  height: 100%;
-  background: var(--paper);
-  border: var(--stroke-line) solid var(--ink-soft);
-  border-radius: 2px;
-}
-.tc-switch[aria-checked="true"] > span { background: var(--route); border-color: var(--route); }
+.tc-seg button:first-child { border-left: 0; }
+.tc-seg button:hover { background: var(--paper-shade); }
+.tc-seg button[aria-checked="true"] { background: var(--wash-route); color: var(--ink); }
 
 .tc-strip {
   position: relative;
@@ -336,3 +325,18 @@ body {
 }
 .maplibregl-ctrl-attrib { background: var(--paper) !important; color: var(--ink-soft) !important; }
 .maplibregl-ctrl-attrib a { color: var(--ink-soft) !important; }
+
+/* A small spinner for short waits. */
+.tc-spinner {
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 2px solid var(--rule);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: tc-spin 0.9s linear infinite;
+}
+@keyframes tc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .tc-spinner { animation-duration: 3s; }
+}

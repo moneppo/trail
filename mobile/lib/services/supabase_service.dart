@@ -51,7 +51,9 @@ class SupabaseService {
         .from('walks')
         .select()
         .order('started_at', ascending: false);
-    return (rows as List).map((r) => Walk.fromJson(r as Map<String, dynamic>)).toList();
+    return (rows as List)
+        .map((r) => Walk.fromJson(r as Map<String, dynamic>))
+        .toList();
   }
 
   // PostgREST caps a single response (1000 rows by default), and a walk
@@ -59,9 +61,11 @@ class SupabaseService {
   static const _pageSize = 1000;
 
   Future<List<Map<String, dynamic>>> _fetchAllByWalk(
-      String table, String walkId) async {
+    String table,
+    String walkId,
+  ) async {
     final rows = <Map<String, dynamic>>[];
-    for (var from = 0;; from += _pageSize) {
+    for (var from = 0; ; from += _pageSize) {
       final page = await _client
           .from(table)
           .select()
@@ -97,16 +101,20 @@ class SupabaseService {
     );
   }
 
-  /// Stretches of a walk already submitted as untracked trails, as
-  /// (start_sequence, end_sequence) pairs.
-  Future<List<(int, int)>> fetchUntrackedTrails(String walkId) async {
+  /// Stretches of a walk submitted as untracked trails, with whether each is
+  /// still a candidate or has been accepted onto the map.
+  Future<List<SubmittedTrail>> fetchUntrackedTrails(String walkId) async {
     final rows = await _client
         .from('untracked_trails')
-        .select('start_sequence, end_sequence')
+        .select('start_sequence, end_sequence, type')
         .eq('walk_id', walkId);
     return [
       for (final r in rows)
-        (r['start_sequence'] as int, r['end_sequence'] as int),
+        SubmittedTrail(
+          r['start_sequence'] as int,
+          r['end_sequence'] as int,
+          accepted: r['type'] == 'accepted',
+        ),
     ];
   }
 

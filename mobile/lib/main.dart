@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'theme/theme_controller.dart';
+import 'theme/settings_controller.dart';
 import 'theme/trail_theme.dart';
 
 Future<void> main() async {
@@ -14,7 +14,7 @@ Future<void> main() async {
     url: dotenv.get('SUPABASE_URL'),
     publishableKey: dotenv.get('SUPABASE_PUBLISHABLE_KEY'),
   );
-  themeController = await ThemeController.load();
+  settings = await SettingsController.load();
   runApp(const TrailApp());
 }
 
@@ -24,12 +24,12 @@ class TrailApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: themeController,
+      listenable: settings,
       builder: (context, _) => MaterialApp(
         title: 'Trail',
         theme: trailTheme(Brightness.light),
         darkTheme: trailTheme(Brightness.dark),
-        themeMode: themeController.mode,
+        themeMode: settings.mode,
         home: const AuthGate(),
       ),
     );

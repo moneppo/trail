@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { OptionsMenu } from "@/components/OptionsMenu";
 import { supabase } from "@/lib/supabaseClient";
+import { friendlyDateTime } from "@/lib/friendlyDate";
+import { formatDistance, useUnits } from "@/lib/units";
 import type { Walk } from "@/lib/types";
 
 function formatDuration(seconds: number) {
@@ -16,6 +18,7 @@ function formatDuration(seconds: number) {
 
 export default function WalksPage() {
   const router = useRouter();
+  const units = useUnits();
   const [walks, setWalks] = useState<Walk[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,23 +44,11 @@ export default function WalksPage() {
     router.replace("/login");
   }
 
-  const totalKm = (walks ?? []).reduce((sum, w) => sum + w.distance_meters, 0) / 1000;
-
   return (
     <main className="flex-1 max-w-2xl mx-auto w-full px-4 pb-12">
-      <header className="tc-rule-bold flex items-end justify-between gap-4 pt-12 pb-4">
-        <div>
-          <p className="tc-label">
-            {walks ? `${walks.length} ${walks.length === 1 ? "walk" : "walks"} · ${totalKm.toFixed(1)} km` : " "}
-          </p>
-          <h1 className="tc-title-xl">Your walks</h1>
-        </div>
-        <div className="flex items-center gap-5">
-          <OptionsMenu />
-          <button onClick={handleSignOut} className="tc-link">
-            Sign out
-          </button>
-        </div>
+      <header className="tc-rule-bold flex items-center justify-between gap-4 pt-12 pb-4">
+        <h1 className="tc-title-xl">Your walks</h1>
+        <OptionsMenu onSignOut={handleSignOut} />
       </header>
       <div className="tc-rule-hair h-1" />
 
@@ -73,8 +64,10 @@ export default function WalksPage() {
               className="flex items-center justify-between gap-4 py-4 hover:underline decoration-dashed underline-offset-4"
             >
               <div>
-                <p className="tc-label">{new Date(walk.started_at).toLocaleString()}</p>
-                <p className="tc-title-md">{(walk.distance_meters / 1000).toFixed(2)} km</p>
+                <p className="tc-title-md">{friendlyDateTime(walk.started_at)}</p>
+                <p className="tc-data text-[var(--ink-soft)]">
+                  {formatDistance(walk.distance_meters, units)}
+                </p>
               </div>
               <span className="tc-data">{formatDuration(walk.duration_seconds)}</span>
             </Link>

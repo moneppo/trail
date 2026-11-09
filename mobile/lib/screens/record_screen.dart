@@ -8,7 +8,10 @@ import '../services/live_route_snapper.dart';
 import '../services/supabase_service.dart';
 import '../services/unmapped_runs.dart';
 import '../services/walk_tracker.dart';
+import '../theme/settings_controller.dart';
 import '../theme/trail_theme.dart';
+import '../utils/format.dart';
+import '../widgets/trail_icons.dart';
 import '../widgets/trail_widgets.dart';
 
 /// How often the walk so far is snapped to streets while recording. Kept
@@ -65,8 +68,9 @@ class _RecordScreenState extends State<RecordScreen> {
     final granted = await _tracker.ensurePermissions();
     if (!mounted) return;
     if (!granted) {
-      setState(() => _error =
-          'Location permission is needed to show where you are and to record a walk.');
+      setState(
+        () => _error = 'Location permission is needed to show where you are and to record a walk.',
+      );
       return;
     }
     await _tracker.startPreview();
@@ -115,7 +119,9 @@ class _RecordScreenState extends State<RecordScreen> {
     if (!mounted) return;
     setState(() => _recording = false);
     if (walk == null) {
-      setState(() => _error = 'No location was recorded, so there is no walk to save.');
+      setState(
+        () => _error = 'No location was recorded, so there is no walk to save.',
+      );
       return;
     }
     _unsaved = walk;
@@ -142,13 +148,6 @@ class _RecordScreenState extends State<RecordScreen> {
     }
   }
 
-  String _formatDuration(Duration d) {
-    final h = d.inHours.toString().padLeft(2, '0');
-    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = TrailColors.of(context);
@@ -169,8 +168,8 @@ class _RecordScreenState extends State<RecordScreen> {
                     if (_recording)
                       _RecordingChip(colors: c)
                     else if (!_saving && _unsaved == null)
-                      SquareGlyphButton(
-                        glyph: '‹',
+                      FloatingIconButton(
+                        icon: TrailIcon.back,
                         semanticLabel: 'Back',
                         onPressed: () => Navigator.of(context).pop(),
                       ),
@@ -189,19 +188,19 @@ class _RecordScreenState extends State<RecordScreen> {
                         if (!_following)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
-                            child: _Pill(
-                              colors: c,
-                              child: TrailLink(
-                                text: 'Center on me',
-                                onPressed: () {
-                                  setState(() => _following = true);
-                                  final here = _tracker.current.value;
-                                  if (here != null) {
-                                    _mapController.move(
-                                        here, _mapController.camera.zoom);
-                                  }
-                                },
-                              ),
+                            child: FloatingIconButton(
+                              icon: TrailIcon.locate,
+                              semanticLabel: 'Center on me',
+                              onPressed: () {
+                                setState(() => _following = true);
+                                final here = _tracker.current.value;
+                                if (here != null) {
+                                  _mapController.move(
+                                    here,
+                                    _mapController.camera.zoom,
+                                  );
+                                }
+                              },
                             ),
                           ),
                       ],
@@ -242,30 +241,32 @@ class _RecordScreenState extends State<RecordScreen> {
 
     final live = _live;
     final track = live?.route ?? const <LatLng>[];
-    final gaps = live == null ? const <(int, int)>[] : findUnmappedRuns(live.statuses);
+    final gaps = live == null
+        ? const <(int, int)>[]
+        : findUnmappedRuns(live.statuses);
 
     Marker dot(LatLng at, {required bool youAreHere}) => Marker(
-          point: at,
-          width: youAreHere ? 30 : 22,
-          height: youAreHere ? 30 : 22,
+      point: at,
+      width: youAreHere ? 30 : 22,
+      height: youAreHere ? 30 : 22,
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.paper,
+          shape: BoxShape.circle,
+          border: Border.all(color: c.ink, width: strokeMarker),
+        ),
+        child: Center(
           child: Container(
+            width: youAreHere ? 14 : 8,
+            height: youAreHere ? 14 : 8,
             decoration: BoxDecoration(
-              color: c.paper,
+              color: youAreHere ? c.route : c.ink,
               shape: BoxShape.circle,
-              border: Border.all(color: c.ink, width: strokeMarker),
-            ),
-            child: Center(
-              child: Container(
-                width: youAreHere ? 14 : 8,
-                height: youAreHere ? 14 : 8,
-                decoration: BoxDecoration(
-                  color: youAreHere ? c.route : c.ink,
-                  shape: BoxShape.circle,
-                ),
-              ),
             ),
           ),
-        );
+        ),
+      ),
+    );
 
     return FlutterMap(
       mapController: _mapController,
@@ -273,8 +274,9 @@ class _RecordScreenState extends State<RecordScreen> {
         backgroundColor: c.paper,
         initialCenter: here,
         initialZoom: 17,
-        interactionOptions:
-            const InteractionOptions(flags: InteractiveFlag.all),
+        interactionOptions: const InteractionOptions(
+          flags: InteractiveFlag.all,
+        ),
         onMapReady: () => _mapReady = true,
         onMapEvent: (event) {
           if (_bearing.value != event.camera.rotation) {
@@ -298,14 +300,14 @@ class _RecordScreenState extends State<RecordScreen> {
           ),
         ),
         if (track.length > 1) ..._routeLayers(c, track, gaps),
-        MarkerLayer(markers: [
-          if (track.isNotEmpty) dot(track.first, youAreHere: false),
-          dot(here, youAreHere: true),
-        ]),
-        const RichAttributionWidget(
-          attributions: [
-            TextSourceAttribution('© OpenStreetMap contributors'),
+        MarkerLayer(
+          markers: [
+            if (track.isNotEmpty) dot(track.first, youAreHere: false),
+            dot(here, youAreHere: true),
           ],
+        ),
+        const RichAttributionWidget(
+          attributions: [TextSourceAttribution('© OpenStreetMap contributors')],
         ),
       ],
     );
@@ -313,39 +315,48 @@ class _RecordScreenState extends State<RecordScreen> {
 
   /// The walk so far: on-map stretches solid, unmapped stretches dashed.
   List<Widget> _routeLayers(
-      TrailColors c, List<LatLng> route, List<(int, int)> gaps) {
+    TrailColors c,
+    List<LatLng> route,
+    List<(int, int)> gaps,
+  ) {
     List<LatLng> slice(int start, int end) => route.sublist(
-        start.clamp(0, route.length), (end + 1).clamp(0, route.length));
+      start.clamp(0, route.length),
+      (end + 1).clamp(0, route.length),
+    );
 
     final solid = <Polyline>[];
     var from = 0;
     for (final g in [...gaps, (route.length, route.length)]) {
       final segment = slice(from, g.$1);
       if (segment.length > 1) {
-        solid.add(Polyline(
-          points: segment,
-          strokeWidth: strokeRoute,
-          color: c.route,
-          borderStrokeWidth: 3,
-          borderColor: c.paper,
-          strokeCap: StrokeCap.round,
-          strokeJoin: StrokeJoin.round,
-        ));
+        solid.add(
+          Polyline(
+            points: segment,
+            strokeWidth: strokeRoute,
+            color: c.route,
+            borderStrokeWidth: 3,
+            borderColor: c.paper,
+            strokeCap: StrokeCap.round,
+            strokeJoin: StrokeJoin.round,
+          ),
+        );
       }
       from = g.$2;
     }
     return [
       PolylineLayer(polylines: solid),
       if (gaps.isNotEmpty)
-        PolylineLayer(polylines: [
-          for (final g in gaps)
-            Polyline(
-              points: slice(g.$1 - 1, g.$2 + 1),
-              strokeWidth: strokeRoute,
-              color: c.unmapped,
-              pattern: StrokePattern.dashed(segments: dashUnmapped),
-            ),
-        ]),
+        PolylineLayer(
+          polylines: [
+            for (final g in gaps)
+              Polyline(
+                points: slice(g.$1 - 1, g.$2 + 1),
+                strokeWidth: strokeRoute,
+                color: c.unmapped,
+                pattern: StrokePattern.dashed(segments: dashUnmapped),
+              ),
+          ],
+        ),
     ];
   }
 
@@ -360,8 +371,9 @@ class _RecordScreenState extends State<RecordScreen> {
           left: BorderSide(color: c.inkSoft, width: strokeLine),
           right: BorderSide(color: c.inkSoft, width: strokeLine),
         ),
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(radiusMd)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(radiusMd),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -370,12 +382,17 @@ class _RecordScreenState extends State<RecordScreen> {
           if (_saving)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('Saving walk…',
-                  style: TrailText.caption(c), textAlign: TextAlign.center),
+              child: Text(
+                'Saving walk…',
+                style: TrailText.caption(c),
+                textAlign: TextAlign.center,
+              ),
             )
           else if (_unsaved != null) ...[
-            Text(_error ?? 'This walk has not been saved yet.',
-                style: TrailText.error(c)),
+            Text(
+              _error ?? 'This walk has not been saved yet.',
+              style: TrailText.error(c),
+            ),
             const SizedBox(height: 16),
             TrailButton(primary: true, label: 'Try again', onPressed: _save),
             const SizedBox(height: 4),
@@ -391,7 +408,7 @@ class _RecordScreenState extends State<RecordScreen> {
             ValueListenableBuilder<Duration>(
               valueListenable: _tracker.duration,
               builder: (_, duration, _) => Text(
-                _formatDuration(duration),
+                formatDuration(duration),
                 style: TrailText.data(c).copyWith(
                   fontSize: 52,
                   height: 1,
@@ -408,7 +425,7 @@ class _RecordScreenState extends State<RecordScreen> {
                   child: ValueListenableBuilder<double>(
                     valueListenable: _tracker.distance,
                     builder: (_, meters, _) => Text(
-                      '${(meters / 1000).toStringAsFixed(2)} km',
+                      formatDistance(meters, settings.units),
                       style: TrailText.data(c).copyWith(fontSize: 22),
                     ),
                   ),
@@ -426,26 +443,25 @@ class _RecordScreenState extends State<RecordScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            TrailButton(primary: true, label: 'Stop walk', onPressed: _stop),
-          ] else ...[
-            Text('New walk', style: TrailText.titleMd(c)),
-            const SizedBox(height: 4),
-            Text(
-              _tracker.current.value == null
-                  ? 'Waiting for your location.'
-                  : 'Your position is on the map. Start when you are ready.',
-              style: TrailText.caption(c),
+            const SizedBox(height: 20),
+            Center(
+              child: RoundActionButton(
+                icon: TrailIcon.stop,
+                label: 'Stop',
+                onPressed: _stop,
+              ),
             ),
+          ] else ...[
             if (_error != null) ...[
-              const SizedBox(height: 8),
               Text(_error!, style: TrailText.error(c)),
+              const SizedBox(height: 12),
             ],
-            const SizedBox(height: 16),
-            TrailButton(
-              primary: true,
-              label: 'Start walk',
-              onPressed: _tracker.current.value == null ? null : _start,
+            Center(
+              child: RoundActionButton(
+                icon: TrailIcon.play,
+                label: 'Start',
+                onPressed: _tracker.current.value == null ? null : _start,
+              ),
             ),
           ],
         ],
@@ -461,26 +477,9 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [LabelText(label), const SizedBox(height: 2), child],
-      );
-}
-
-class _Pill extends StatelessWidget {
-  final TrailColors colors;
-  final Widget child;
-  const _Pill({required this.colors, required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: colors.paper,
-          border: Border.all(color: colors.inkSoft, width: strokeLine),
-          borderRadius: BorderRadius.circular(radiusSm),
-        ),
-        child: child,
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [LabelText(label), const SizedBox(height: 2), child],
+  );
 }
 
 class _RecordingChip extends StatelessWidget {
@@ -489,24 +488,26 @@ class _RecordingChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.paper,
-          border: Border.all(color: colors.inkSoft, width: strokeLine),
-          borderRadius: BorderRadius.circular(radiusSm),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: colors.paper,
+      border: Border.all(color: colors.inkSoft, width: strokeLine),
+      borderRadius: BorderRadius.circular(radiusSm),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: colors.route,
+            shape: BoxShape.circle,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration:
-                  BoxDecoration(color: colors.route, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 8),
-            const LabelText('Recording'),
-          ],
-        ),
-      );
+        const SizedBox(width: 8),
+        const LabelText('Recording'),
+      ],
+    ),
+  );
 }

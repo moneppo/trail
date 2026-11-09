@@ -3,10 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../theme/trail_theme.dart';
+import 'trail_icons.dart';
 
-/// A thin-outlined button with a small corner radius and no shadow. Primary
-/// carries a light wash of the route hue with route-colored text; the plain
-/// version sits on paper.
+/// A thin-outlined button with a small corner radius and no shadow. The
+/// outline and label are always the text color. Primary carries a light wash
+/// of the route hue behind them; the plain version sits on paper.
 class TrailButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
@@ -41,11 +42,11 @@ class _TrailButtonState extends State<TrailButton> {
       fg = c.inkSoft;
     } else if (widget.primary) {
       fill = c.washRoute;
-      border = down ? c.ink : c.route;
-      fg = down ? c.ink : c.route;
+      border = c.ink;
+      fg = c.ink;
     } else {
       fill = down ? c.paperShade : c.paper;
-      border = c.inkSoft;
+      border = c.ink;
       fg = c.ink;
     }
 
@@ -109,8 +110,120 @@ class SquareGlyphButton extends StatelessWidget {
             border: Border.all(color: c.inkSoft, width: strokeLine),
             borderRadius: BorderRadius.circular(radiusSm),
           ),
-          child: Text(glyph,
-              style: TrailText.body(c).copyWith(fontSize: 26, height: 1)),
+          child: Text(
+            glyph,
+            style: TrailText.body(c).copyWith(fontSize: 26, height: 1),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A round icon button that floats over a map: paper fill, thin outline.
+class FloatingIconButton extends StatelessWidget {
+  final TrailIcon icon;
+  final String semanticLabel;
+  final VoidCallback onPressed;
+
+  const FloatingIconButton({
+    super.key,
+    required this.icon,
+    required this.semanticLabel,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onPressed,
+        child: Container(
+          width: 44,
+          height: 44,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: c.paper,
+            shape: BoxShape.circle,
+            border: Border.all(color: c.inkSoft, width: strokeLine),
+          ),
+          child: TrailIconView(icon, color: c.ink),
+        ),
+      ),
+    );
+  }
+}
+
+/// A large round button with an icon and a label underneath, for the main
+/// action on the walk screen: Start, then Stop.
+class RoundActionButton extends StatefulWidget {
+  final TrailIcon icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  const RoundActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  State<RoundActionButton> createState() => _RoundActionButtonState();
+}
+
+class _RoundActionButtonState extends State<RoundActionButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
+    final enabled = widget.onPressed != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: widget.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+        onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+        onTap: widget.onPressed,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 76,
+              height: 76,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: !enabled
+                    ? c.paperShade
+                    : (_pressed ? c.paperShade : c.washRoute),
+                border: Border.all(
+                  color: enabled ? c.ink : c.inkFaint,
+                  width: strokeLine,
+                ),
+              ),
+              child: TrailIconView(
+                widget.icon,
+                color: enabled ? c.ink : c.inkSoft,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.label.toUpperCase(),
+              style: TrailText.button(c)
+                  .copyWith(color: enabled ? c.ink : c.inkSoft, fontSize: 14),
+            ),
+          ],
         ),
       ),
     );
@@ -180,8 +293,7 @@ class TrailSwitch extends StatelessWidget {
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           decoration: BoxDecoration(
             color: value ? c.washRoute : c.paperShade,
-            border:
-                Border.all(color: value ? c.route : c.inkSoft, width: strokeLine),
+            border: Border.all(color: c.ink, width: strokeLine),
             borderRadius: BorderRadius.circular(radiusSm),
           ),
           child: Container(
@@ -189,7 +301,9 @@ class TrailSwitch extends StatelessWidget {
             decoration: BoxDecoration(
               color: value ? c.route : c.paper,
               border: Border.all(
-                  color: value ? c.route : c.inkSoft, width: strokeLine),
+                color: value ? c.route : c.inkSoft,
+                width: strokeLine,
+              ),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -237,10 +351,8 @@ class LabelText extends StatelessWidget {
   const LabelText(this.text, {super.key});
 
   @override
-  Widget build(BuildContext context) => Text(
-        text.toUpperCase(),
-        style: TrailText.label(TrailColors.of(context)),
-      );
+  Widget build(BuildContext context) =>
+      Text(text.toUpperCase(), style: TrailText.label(TrailColors.of(context)));
 }
 
 /// North arrow drawn in ink: two rings and four points, north in the route
@@ -279,7 +391,11 @@ class _CompassPainter extends CustomPainter {
   final Color ink;
   final Color paper;
   final Color north;
-  _CompassPainter({required this.ink, required this.paper, required this.north});
+  _CompassPainter({
+    required this.ink,
+    required this.paper,
+    required this.north,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -294,12 +410,13 @@ class _CompassPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..strokeJoin = StrokeJoin.round;
     canvas.drawCircle(
-        Offset.zero,
-        36,
-        Paint()
-          ..color = ink
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.75);
+      Offset.zero,
+      36,
+      Paint()
+        ..color = ink
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.75,
+    );
     canvas.drawCircle(Offset.zero, 29, Paint()..color = paper);
     canvas.drawCircle(Offset.zero, 29, line);
 
@@ -312,17 +429,21 @@ class _CompassPainter extends CustomPainter {
       ..close();
 
     canvas.drawPath(
-        kite(const Offset(0, -46), const Offset(6, -6), const Offset(-6, -6)),
-        Paint()..color = north);
+      kite(const Offset(0, -46), const Offset(6, -6), const Offset(-6, -6)),
+      Paint()..color = north,
+    );
     canvas.drawPath(
-        kite(const Offset(0, 46), const Offset(6, 6), const Offset(-6, 6)),
-        line);
+      kite(const Offset(0, 46), const Offset(6, 6), const Offset(-6, 6)),
+      line,
+    );
     canvas.drawPath(
-        kite(const Offset(-46, 0), const Offset(-6, -6), const Offset(-6, 6)),
-        line);
+      kite(const Offset(-46, 0), const Offset(-6, -6), const Offset(-6, 6)),
+      line,
+    );
     canvas.drawPath(
-        kite(const Offset(46, 0), const Offset(6, -6), const Offset(6, 6)),
-        line);
+      kite(const Offset(46, 0), const Offset(6, -6), const Offset(6, 6)),
+      line,
+    );
   }
 
   @override
@@ -338,17 +459,134 @@ ColorFilter inkTileFilter(Brightness brightness) {
   if (brightness == Brightness.dark) {
     const k = 0.7;
     return ColorFilter.matrix([
-      -k * r, -k * g, -k * b, 0, k * 255 + 12,
-      -k * r, -k * g, -k * b, 0, k * 255 + 10,
-      -k * r, -k * g, -k * b, 0, k * 255 + 4,
-      0, 0, 0, 1, 0,
+      -k * r,
+      -k * g,
+      -k * b,
+      0,
+      k * 255 + 12,
+      -k * r,
+      -k * g,
+      -k * b,
+      0,
+      k * 255 + 10,
+      -k * r,
+      -k * g,
+      -k * b,
+      0,
+      k * 255 + 4,
+      0,
+      0,
+      0,
+      1,
+      0,
     ]);
   }
   const k = 0.62;
   return const ColorFilter.matrix([
-    k * r, k * g, k * b, 0, 90,
-    k * r, k * g, k * b, 0, 89,
-    k * r, k * g, k * b, 0, 84,
-    0, 0, 0, 1, 0,
+    k * r,
+    k * g,
+    k * b,
+    0,
+    90,
+    k * r,
+    k * g,
+    k * b,
+    0,
+    89,
+    k * r,
+    k * g,
+    k * b,
+    0,
+    84,
+    0,
+    0,
+    0,
+    1,
+    0,
   ]);
+}
+
+/// One choice in a [SegmentedToggle]: an icon or a short text, plus the full
+/// name used by screen readers.
+class ToggleSegment<T> {
+  final T value;
+  final String label;
+  final TrailIcon? icon;
+  final String? text;
+
+  const ToggleSegment({
+    required this.value,
+    required this.label,
+    this.icon,
+    this.text,
+  });
+}
+
+/// A row of connected choices where exactly one is selected, shown as icons
+/// or short text. The chosen segment takes a light wash and an ink icon.
+class SegmentedToggle<T> extends StatelessWidget {
+  final T value;
+  final ValueChanged<T> onChanged;
+  final List<ToggleSegment<T>> segments;
+
+  const SegmentedToggle({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.segments,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = TrailColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: c.inkSoft, width: strokeLine),
+        borderRadius: BorderRadius.circular(radiusSm),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(radiusSm - strokeLine),
+        child: Row(
+          children: [
+            for (var i = 0; i < segments.length; i++) ...[
+              if (i > 0)
+                Container(width: strokeLine, height: 44, color: c.inkSoft),
+              Expanded(child: _segment(c, segments[i])),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(TrailColors c, ToggleSegment<T> segment) {
+    final selected = segment.value == value;
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      checked: selected,
+      button: true,
+      label: segment.label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => onChanged(segment.value),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          color: selected ? c.washRoute : c.paper,
+          child: segment.icon != null
+              ? TrailIconView(
+                  segment.icon!,
+                  color: selected ? c.ink : c.inkSoft,
+                )
+              : Text(
+                  segment.text ?? segment.label,
+                  style: TrailText.button(
+                    c,
+                  ).copyWith(color: selected ? c.ink : c.inkSoft, fontSize: 15),
+                ),
+        ),
+      ),
+    );
+  }
 }

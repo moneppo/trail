@@ -23,14 +23,21 @@ export async function fetchAllByWalk<T>(
   return rows;
 }
 
-/** Stretches of a walk already submitted as untracked trails, as [start, end] sequence pairs. */
-export async function fetchUntrackedTrails(walkId: string): Promise<[number, number][]> {
+/** A stretch of a walk (inclusive point indices) submitted as an untracked trail. */
+export type SubmittedTrail = { start: number; end: number; accepted: boolean };
+
+/** Stretches of a walk submitted as untracked trails, and whether each has been accepted onto the map. */
+export async function fetchUntrackedTrails(walkId: string): Promise<SubmittedTrail[]> {
   const { data, error } = await supabase
     .from("untracked_trails")
-    .select("start_sequence, end_sequence")
+    .select("start_sequence, end_sequence, type")
     .eq("walk_id", walkId);
   if (error) throw new Error(error.message);
-  return data.map((r) => [r.start_sequence, r.end_sequence] as [number, number]);
+  return data.map((r) => ({
+    start: r.start_sequence as number,
+    end: r.end_sequence as number,
+    accepted: r.type === "accepted",
+  }));
 }
 
 /** Submits a stretch of a walk as a candidate untracked trail. */

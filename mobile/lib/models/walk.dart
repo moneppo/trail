@@ -60,3 +60,13 @@ class WalkPoint {
     };
   }
 }
+
+/// A stretch of a walk (inclusive point indices) submitted as an untracked
+/// trail. Candidates await review; accepted ones are on the map.
+class SubmittedTrail {
+  final int start;
+  final int end;
+  final bool accepted;
+
+  const SubmittedTrail(this.start, this.end, {this.accepted = false});
+}

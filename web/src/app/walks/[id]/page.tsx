@@ -17,7 +17,15 @@ import {
   type MatchStatus,
 } from "@/lib/routeMatcher";
 import { findUnmappedRuns, MIN_TRAIL_POINTS } from "@/lib/unmappedRuns";
-import { fetchAllByWalk, fetchUntrackedTrails, submitUntrackedTrail } from "@/lib/walkData";
+import {
+  fetchAllByWalk,
+  fetchUntrackedTrails,
+  submitUntrackedTrail,
+  type SubmittedTrail,
+} from "@/lib/walkData";
+import { friendlyDateTime } from "@/lib/friendlyDate";
+import { formatDistance, formatShortDistance, useUnits } from "@/lib/units";
+import { BackIcon, InfoIcon } from "@/components/Icons";
 import type { Walk, WalkPoint } from "@/lib/types";
 
 type Range = [number, number];
@@ -33,6 +41,7 @@ function palette() {
     route: read("--route"),
     unmapped: read("--unmapped"),
     candidate: read("--candidate"),
+    accepted: read("--accepted"),
   };
 }
 
@@ -80,7 +89,9 @@ function WalkDetailContent() {
   const [statuses, setStatuses] = useState<MatchStatus[] | null>(null);
   // Set only when matching to streets failed and the recorded route is shown.
   const [snapNote, setSnapNote] = useState<string | null>(null);
-  const [trails, setTrails] = useState<Range[]>([]);
+  const [trails, setTrails] = useState<SubmittedTrail[]>([]);
+  const [showInfo, setShowInfo] = useState(false);
+  const units = useUnits();
   // The stretch being adjusted in the panel, as point indices.
   const [selection, setSelection] = useState<Range | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -93,19 +104,19 @@ function WalkDetailContent() {
   // map.
   const routeRef = useRef<LngLat[]>([]);
   const gapsRef = useRef<Range[]>([]);
-  const trailsRef = useRef<Range[]>([]);
+  const trailsRef = useRef<SubmittedTrail[]>([]);
   const selectionRef = useRef<Range | null>(null);
   const openGapRef = useRef<(gap: Range) => void>(() => {});
 
   const overlapsTrail = (start: number, end: number) =>
-    trails.some(([s, e]) => start <= e && end >= s);
+    trails.some((t) => start <= t.end && end >= t.start);
 
   // Unmapped runs that haven't been submitted yet; these are the clickable
   // dashed sections.
   const gaps = useMemo(() => {
     if (!statuses) return [];
     return findUnmappedRuns(statuses).filter(
-      ([s, e]) => !trails.some(([ts, te]) => s <= te && e >= ts),
+      ([s, e]) => !trails.some((t) => s <= t.end && e >= t.start),
     );
   }, [statuses, trails]);
 
@@ -139,7 +150,7 @@ function WalkDetailContent() {
         params.id,
         points.map((p) => [p.lng, p.lat] as LngLat),
       ),
-      fetchUntrackedTrails(params.id).catch(() => [] as Range[]),
+      fetchUntrackedTrails(params.id).catch(() => [] as SubmittedTrail[]),
     ]).then(([result, submitted]) => {
       if (cancelled) return;
       setSnapped(result.route);
@@ -160,7 +171,10 @@ function WalkDetailContent() {
   // first created.
   useEffect(() => {
     if (!points) return;
-    routeRef.current = snapped ?? points.map((p) => [p.lng, p.lat] as LngLat);
+    // Nothing is drawn until the route has been snapped (or matching failed and
+    // the recorded route stands in), so the unsnapped line never flashes up
+    // first. The map still fits to the recorded points meanwhile.
+    routeRef.current = snapped ?? [];
     gapsRef.current = gaps;
     trailsRef.current = trails;
     selectionRef.current = selection;
@@ -220,6 +234,7 @@ function WalkDetailContent() {
       const route = routeRef.current;
       const gaps = gapsRef.current;
       const screen = route.map(project);
+      if (screen.length === 0) return;
       const line = (from: number, to: number) =>
         screen.slice(Math.max(0, from), Math.min(screen.length, to + 1));
       const colors = palette();
@@ -267,11 +282,11 @@ function WalkDetailContent() {
         });
       }
 
-      for (const [start, end] of trailsRef.current) {
+      for (const { start, end, accepted } of trailsRef.current) {
         traceLine(line(start, end), TRAIL_WIDTH + 6);
         roughCanvas.linearPath(line(start, end), {
           ...base,
-          stroke: colors.candidate,
+          stroke: accepted ? colors.accepted : colors.candidate,
           strokeWidth: TRAIL_WIDTH,
         });
       }
@@ -412,12 +427,14 @@ function WalkDetailContent() {
     }
     try {
       await submitUntrackedTrail(params.id, userId, start, end);
-      setTrails((prev) => [...prev, [start, end]]);
+      setTrails((prev) => [...prev, { start, end, accepted: false }]);
       closePanel();
     } catch (e) {
       setSubmitError(`Couldn't submit: ${e instanceof Error ? e.message : e}`);
     }
   }
+
+  const loading = !!points?.length && !snapped && !error;
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
@@ -431,52 +448,58 @@ function WalkDetailContent() {
         className="absolute top-4 right-4 z-10"
       />
 
-      <div className="tc-panel absolute top-4 left-4 z-10 flex w-[min(22rem,calc(100%-7rem))] flex-col gap-3 p-4">
-        <div className="flex items-start gap-3">
-          <Link href="/walks" aria-label="Back to walks" className="tc-close shrink-0">
-            ‹
-          </Link>
-          <div className="min-w-0">
-            {error && <p className="tc-error">{error}</p>}
-            {walk && (
-              <>
-                <h1 className="tc-title-md">{(walk.distance_meters / 1000).toFixed(2)} km</h1>
-                <p className="tc-data text-[var(--ink-soft)]">
-                  {new Date(walk.started_at).toLocaleString()} · {formatDuration(walk.duration_seconds)}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
+      <Link
+        href="/walks"
+        aria-label="Back to walks"
+        className="tc-icon-btn absolute top-4 left-4 z-10"
+      >
+        <BackIcon />
+      </Link>
 
-        {snapNote && <p className="tc-caption">{snapNote}</p>}
-
-        {statuses && (
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            <div className="flex items-center gap-2">
-              <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true">
-                <path d="M2 5 H34" stroke="var(--route)" strokeWidth="4" strokeLinecap="round" />
-              </svg>
-              <span className="tc-label">On the map</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true">
-                <path
-                  d="M2 5 H34"
-                  stroke="var(--unmapped)"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray="10 7"
-                />
-              </svg>
-              <span className="tc-label">Unmapped</span>
-            </div>
-          </div>
+      <div className="tc-panel absolute top-4 left-[4.25rem] z-10 flex w-[min(20rem,calc(100%-12rem))] flex-col gap-1 px-4 py-3">
+        {error && <p className="tc-error">{error}</p>}
+        {walk && (
+          <>
+            <h1 className="tc-title-md">{friendlyDateTime(walk.started_at)}</h1>
+            <p className="tc-data text-[var(--ink-soft)]">
+              {formatDistance(walk.distance_meters, units)} · {formatDuration(walk.duration_seconds)}
+            </p>
+          </>
         )}
-        {gaps.length > 0 && !selection && (
-          <p className="tc-hint">Click a dashed stretch to mark it as a trail.</p>
+        {snapNote && <p className="tc-caption">{snapNote}</p>}
+      </div>
+
+      <div className="absolute top-[6.5rem] right-4 z-10 flex flex-col items-end gap-2">
+        <button
+          type="button"
+          className="tc-icon-btn"
+          aria-label="Map key"
+          aria-haspopup="true"
+          aria-expanded={showInfo}
+          onClick={() => setShowInfo(!showInfo)}
+        >
+          <InfoIcon />
+        </button>
+        {showInfo && (
+          <div className="tc-panel flex w-64 flex-col gap-3 p-4">
+            <KeyLine label="On the map" color="var(--route)" width={4} />
+            <KeyLine label="Unmapped" color="var(--unmapped)" width={4} dashed />
+            <KeyLine label="Submitted route" color="var(--candidate)" width={6} />
+            <KeyLine label="Approved route" color="var(--accepted)" width={6} />
+            <p className="tc-hint">Click a dashed stretch to mark it as a trail.</p>
+          </div>
         )}
       </div>
+
+      {loading && (
+        <div
+          role="status"
+          aria-label="Matching your route to streets"
+          className="tc-panel absolute bottom-6 left-1/2 z-10 grid h-10 w-10 -translate-x-1/2 place-items-center !rounded-full"
+        >
+          <span className="tc-spinner" />
+        </div>
+      )}
 
       {selection && (
         <div className="tc-panel absolute bottom-10 left-1/2 z-10 flex w-[min(28rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-4 p-4">
@@ -537,7 +560,7 @@ function WalkDetailContent() {
           <div className="tc-data flex justify-between gap-4">
             <span>Point {selection[0] + 1}</span>
             <span>
-              {selection[1] - selection[0] + 1} points · {Math.round(selectionMeters)} m
+              {selection[1] - selection[0] + 1} points · {formatShortDistance(selectionMeters, units)}
             </span>
             <span>Point {selection[1] + 1}</span>
           </div>
@@ -550,5 +573,33 @@ function WalkDetailContent() {
         </div>
       )}
     </main>
+  );
+}
+
+/** One entry in the map key: a short sample of the line and its name. */
+function KeyLine({
+  label,
+  color,
+  width,
+  dashed,
+}: {
+  label: string;
+  color: string;
+  width: number;
+  dashed?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <svg width="36" height="10" viewBox="0 0 36 10" aria-hidden="true" className="shrink-0">
+        <path
+          d="M3 5 H33"
+          stroke={color}
+          strokeWidth={width}
+          strokeLinecap={dashed ? "butt" : "round"}
+          strokeDasharray={dashed ? "10 7" : undefined}
+        />
+      </svg>
+      <span className="tc-label">{label}</span>
+    </div>
   );
 }
